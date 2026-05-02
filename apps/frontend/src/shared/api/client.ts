@@ -16,7 +16,8 @@ const RAW_API_BASE: string = (() => {
       : "";
   if (envBase) return envBase;
 
-  return "http://localhost:3001";
+  // Build production: để trống → `/api/...` cùng origin (Nginx proxy). Fallback localhost làm sai domain trên VPS.
+  return "";
 })();
 
 function normalizeBaseUrl(value: string): string {
@@ -82,9 +83,9 @@ export async function apiFetch(
     handleUnauthorized(input, res);
     return res;
   } catch (error) {
-    if (!input.startsWith("http")) {
+    if (isDev && !input.startsWith("http")) {
       try {
-        const res = await fetch(`http://127.0.0.1:3001${input}`, finalInit);
+        const res = await fetch(`http://127.0.0.1:3001/${input.replace(/^\/+/, "")}`, finalInit);
         captureCsrfToken(res);
         handleUnauthorized(input, res);
         return res;
