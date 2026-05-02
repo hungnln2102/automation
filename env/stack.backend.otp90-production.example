@@ -1,14 +1,14 @@
 # Mẫu production — copy thành `stack.backend.env` trên VPS (hoặc merge vào .env systemd).
-# Nginx: `deploy/nginx/otp90-automation-admin.conf`
+# Nginx (admin + otp90.com): `deploy/nginx/otp90-automation.conf`
 
 NODE_ENV=production
 PORT=6000
 
-# Dashboard SPA đang serve tại origin này (bắt buộc cho CORS + cookie).
-FRONTEND_ORIGINS=https://admin.otp90.com,http://admin.otp90.com
+# Cả admin + apex (form check trên otp90.com cùng gọi /api hoặc CORS hoá trên subdomain).
+FRONTEND_ORIGINS=https://admin.otp90.com,https://otp90.com,https://www.otp90.com
 
-# URL công khai của API sau reverse proxy (cùng host admin hoặc subdomain riêng).
-PUBLIC_BASE_URL=https://admin.otp90.com
+# Trang chủ / form công khai (tuỳ bạn chỉnh HTTPS redirect www → apex trong Nginx)
+PUBLIC_BASE_URL=https://otp90.com
 
 # HTTPS: để session/csrf hoạt động đúng.
 COOKIE_SECURE=true

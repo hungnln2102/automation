@@ -7,6 +7,7 @@
     "docker:up": "docker compose --project-name automation-stack up -d",
     "docker:down": "docker compose --project-name automation-stack down",
     "docker:logs": "docker compose --project-name automation-stack logs -f postgres redis",
+    "deploy": "bash deploy.sh",
     "dev:backend": "node scripts/dev-backend.cjs",
     "dev:frontend": "node scripts/dev-frontend.cjs",
     "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",

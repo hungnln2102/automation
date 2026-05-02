@@ -1,0 +1,63 @@
+# Ghép với docker-compose.yml — chạy: ./deploy.sh
+# API + scheduler Renew Adobe — cần stack env (DATABASE/REDIS nội bộ ghi đè tại đây).
+#
+# prerequisites: cp env/stack.backend.env.example env/stack.backend.env và chỉnh SESSION_SECRET,
+# FRONTEND_ORIGINS, PUBLIC_BASE_URL, v.v. (PostgreSQL trong Docker dùng host `postgres`.)
+
+services:
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: automation-stack-backend
+    restart: unless-stopped
+    shm_size: "2gb"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./env/stack.backend.env
+    environment:
+      NODE_ENV: production
+      APP_ENV: docker
+      PORT: "6000"
+      DATABASE_URL: postgresql://automation_admin:automation_admin_dev@postgres:5432/automation_store
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+    ports:
+      - "${BACKEND_HOST_PORT:-6000}:6000"
+    volumes:
+      - automation_adobe_profiles:/app/.adobe-profiles
+
+  scheduler:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: automation-stack-scheduler
+    restart: unless-stopped
+    shm_size: "2gb"
+    command: ["node", "scheduler.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    env_file:
+      - ./env/stack.backend.env
+    environment:
+      NODE_ENV: production
+      APP_ENV: docker
+      PORT: "6000"
+      DATABASE_URL: postgresql://automation_admin:automation_admin_dev@postgres:5432/automation_store
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+    volumes:
+      - automation_adobe_profiles:/app/.adobe-profiles
+
+volumes:
+  automation_adobe_profiles:
+    name: automation_stack_adobe_profiles

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { LoginPage } from "@/features/auth";
 import { AuthProvider } from "./AuthContext";
@@ -6,6 +7,52 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { MainLayout } from "./components/layout/MainLayout";
 import { AppRoutes } from "./routes/AppRoutes";
 import AppNotification from "./components/modals/AppNotification";
+import { isPublicRenewHost } from "@/lib/publicRenewHost";
+
+const RenewAdobePublicCheckPage = lazy(
+  () => import("@/features/renew-adobe/storefront-check/RenewAdobePublicCheckPage"),
+);
+
+const ShellSpinner = () => (
+  <div className="flex min-h-screen items-center justify-center bg-slate-950">
+    <div className="h-9 w-9 animate-spin rounded-full border-2 border-slate-600 border-t-violet-500" />
+  </div>
+);
+
+function PublicRenewOnlyRoutes() {
+  return (
+    <Suspense fallback={<ShellSpinner />}>
+      <RenewAdobePublicCheckPage />
+    </Suspense>
+  );
+}
+
+/** otp90.com / www → chỉ form Renew công khai; subdomain admin.* → SPA đầy đủ. */
+function AppShell() {
+  if (typeof window !== "undefined" && isPublicRenewHost()) {
+    return (
+      <Routes>
+        <Route path="*" element={<PublicRenewOnlyRoutes />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <AppRoutes />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}
 
 function App() {
   return (
@@ -13,19 +60,7 @@ function App() {
       <Router>
         <AuthProvider>
           <AppNotification />
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <MainLayout>
-                    <AppRoutes />
-                  </MainLayout>
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
+          <AppShell />
         </AuthProvider>
       </Router>
     </ErrorBoundary>

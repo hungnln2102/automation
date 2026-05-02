@@ -3,9 +3,11 @@ import { Link } from "react-router-dom";
 import { useStorefrontRenewCheck } from "./hooks/useStorefrontRenewCheck";
 import { RenewAdobePublicStatusDisplay } from "./components/RenewAdobePublicStatusDisplay";
 import { RENEW_ADOBE_PUBLIC_CHECK_STYLES } from "./renewAdobePublicCheck.styles";
+import { isPublicRenewHost } from "@/lib/publicRenewHost";
 
 /**
- * UI khớp cửa hàng (`Website/my-store/.../CheckProfile/RenewAdobePage.tsx`) — kiểm tra qua `/api/renew-adobe/public/*`.
+ * UI khớp cửa hàng — kiểm tra qua `/api/renew-adobe/public/*`.
+ * Trên otp90.com: standalone, không nút vào admin. Trên admin.*: có link “Bàn admin”.
  */
 export default function RenewAdobePublicCheckPage() {
   const {
@@ -24,9 +26,15 @@ export default function RenewAdobePublicCheckPage() {
     handleActivate,
   } = useStorefrontRenewCheck();
 
+  const publicSurface = typeof window !== "undefined" ? isPublicRenewHost() : false;
+
+  const outerCls = publicSurface
+    ? "min-h-screen bg-slate-950 text-slate-50"
+    : "min-h-[min(760px,calc(100vh-10rem))] text-slate-50";
+
   return (
-    <div className="min-h-[min(760px,calc(100vh-10rem))] text-slate-50">
-      <div className="mx-auto flex w-full max-w-xl flex-col justify-center pb-12 pt-2">
+    <div className={outerCls}>
+      <div className={`mx-auto flex w-full max-w-xl flex-col justify-center pb-12 ${publicSurface ? "min-h-screen px-4 pt-10" : "pt-2"}`}>
         <div className="mb-4 px-1">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -37,12 +45,14 @@ export default function RenewAdobePublicCheckPage() {
                 Kiểm tra và kích hoạt lại Adobe profile
               </p>
             </div>
-            <Link
-              to="/renew-adobe-admin"
-              className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-slate-300 transition hover:bg-white/[0.08]"
-            >
-              ← Bàn admin
-            </Link>
+            {!publicSurface ? (
+              <Link
+                to="/renew-adobe-admin"
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-slate-300 transition hover:bg-white/[0.08]"
+              >
+                ← Bàn admin
+              </Link>
+            ) : null}
           </div>
         </div>
 
