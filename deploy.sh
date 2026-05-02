@@ -78,7 +78,9 @@ fi
 STACK_ENV="${ROOT}/env/stack.backend.env"
 if [[ ! -f "${STACK_ENV}" ]]; then
   echo "[deploy] Không có ${STACK_ENV}"
-  echo "       -> Copy: cp env/stack.backend.env.example env/stack.backend.env rồi chỉnh (SESSION_SECRET,...)."
+  echo "       -> cp env/stack.backend.env.example env/stack.backend.env"
+  echo "          hoặc: cp env/stack.backend.production.example env/stack.backend.env"
+  echo "          rồi chỉnh SESSION_SECRET, FRONTEND_ORIGINS, ..."
   exit 1
 fi
 
