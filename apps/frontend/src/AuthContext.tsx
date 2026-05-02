@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { apiFetch } from "./lib/api";
+import { isPublicRenewHost } from "./lib/publicRenewHost";
 
 type User = { id: number; username: string; role?: string };
 
@@ -24,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
 
   const refresh = async () => {
     try {
@@ -42,7 +45,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
-    refresh();
+    if (isPublicRenewHost()) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+    if (location.pathname === "/login") {
+      setLoading(false);
+      return;
+    }
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ lúc mount: bỏ /me cho /login & host storefront
   }, []);
 
   return (
