@@ -1,0 +1,15 @@
+/* Glass login theme — dark + neon accents */
+:root {
+  --retro-bg: #0b0b15;
+  --retro-card: rgba(255, 255, 255, 0.06);
+  --retro-border: rgba(255, 255, 255, 0.12);
+  --retro-text: #f0f0f5;
+  --retro-muted: #a0a0a0;
+  --retro-accent: #ff69b4;
+  --retro-accent-2: #9370db;
+  --retro-accent-3: #00ffff;
+  --retro-glow: 0 20px 60px rgba(147, 112, 219, 0.35), 0 0 1px rgba(255, 255, 255, 0.08);
+  --glass: rgba(10, 10, 20, 0.65);
+  --glass-input: rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}

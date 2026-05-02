@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Runtime and local generated files
+logs/
+**/logs/
+tmp/
+**/tmp/
+var/
+.playwright-mcp/
+automation-dev.*.log
+
+# Env có secret — chỉ giữ các file *.example trên Git
+env/stack.backend.env
+env/stack.backend.local.env
+apps/backend/.env
+apps/backend/.env.docker
+apps/backend/.env.local
+apps/backend/.env.deprecated
+apps/frontend/.env
+apps/frontend/.env.local
+apps/frontend/.env.production
+*.local
+
+apps/backend/.adobe-profiles/
+apps/backend/cookies/
+
+# OS/editor
+.DS_Store
+Thumbs.db

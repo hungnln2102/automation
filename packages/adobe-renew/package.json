@@ -1,0 +1,5 @@
+{
+  "name": "automation-adobe-renew-reference",
+  "private": true,
+  "description": "Reference snapshot and notes for the Renew Adobe flow. Runtime code lives in apps/backend and apps/frontend."
+}

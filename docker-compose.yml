@@ -1,0 +1,41 @@
+# Dedicated stack for the standalone Automation workspace.
+# PostgreSQL host :6432, Redis host :6480.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: automation-stack-postgres
+    environment:
+      POSTGRES_USER: automation_admin
+      POSTGRES_PASSWORD: automation_admin_dev
+      POSTGRES_DB: automation_store
+    ports:
+      - "6432:5432"
+    volumes:
+      - automation_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U automation_admin -d automation_store"]
+      interval: 6s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    container_name: automation-stack-redis
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6480:6379"
+    volumes:
+      - automation_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 8
+
+volumes:
+  automation_pg_data:
+    name: automation_stack_pg_data
+  automation_redis_data:
+    name: automation_stack_redis_data

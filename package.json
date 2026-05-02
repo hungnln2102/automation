@@ -1,0 +1,29 @@
+{
+  "name": "automation-workspace",
+  "private": true,
+  "description": "Standalone Automation workspace for the admin system.",
+  "scripts": {
+    "bootstrap": "node scripts/bootstrap.cjs",
+    "docker:up": "docker compose --project-name automation-stack up -d",
+    "docker:down": "docker compose --project-name automation-stack down",
+    "docker:logs": "docker compose --project-name automation-stack logs -f postgres redis",
+    "dev:backend": "node scripts/dev-backend.cjs",
+    "dev:frontend": "node scripts/dev-frontend.cjs",
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "migrate": "node scripts/backend-run.cjs migrate",
+    "migrate:status": "node scripts/backend-run.cjs migrate:status",
+    "db:doctor": "node scripts/db-doctor.cjs",
+    "db:migrate": "node scripts/backend-run.cjs migrate",
+    "db:status": "node scripts/backend-run.cjs migrate:status",
+    "db:seed": "node scripts/backend-run.cjs seed:hero-banners",
+    "db:setup": "npm run db:doctor && npm run db:migrate && npm run db:seed",
+    "db:setup:automation-only": "node scripts/setup-system-automation-db.cjs",
+    "install:apps": "npm --prefix apps/backend install && npm --prefix apps/frontend install",
+    "build:frontend": "npm --prefix apps/frontend run build",
+    "test:backend": "npm --prefix apps/backend run test",
+    "test:frontend": "npm --prefix apps/frontend run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
