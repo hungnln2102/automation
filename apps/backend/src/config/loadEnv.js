@@ -25,7 +25,9 @@ const configEnvFile = (fileName, options = {}) =>
 /**
  * Thứ tự nạp biến môi trường:
  * - Luôn thử `.env` trước (mỏng, không bắt buộc tồn tại).
- * - Production-like: **`.env.docker`** ghi đè (ưu tiên cho Docker / server production).
+ * - Production-like: **`.env.docker`** — chỉ điền chỗ trống (**override: false**). Biến đã có (Docker
+ *   Compose `env_file`, systemd `Environment=`, `docker run -e …`) phải được giữ để tránh ghi đè
+ *   `FRONTEND_ORIGINS`, `DATABASE_URL`, v.v. — lỗi CORS khi server vẫn dùng mặc định localhost của file.
  * - Còn lại (dev/test local): **`.env.local`** ghi đè.
  * - `BACKEND_ENV_FILE` hoặc `DOTENV_CONFIG_PATH`: đường dẫn file đơn lẻ, override toàn bộ logic trên.
  */
@@ -42,7 +44,7 @@ function loadBackendEnv() {
   configEnvFile(FILE_SHARED);
 
   if (isProductionLike()) {
-    configEnvFile(FILE_DOCKER, { override: true });
+    configEnvFile(FILE_DOCKER, { override: false });
     return;
   }
 
