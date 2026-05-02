@@ -15,6 +15,8 @@
 #   ./deploy.sh --no-pull            # không kéo code (deploy từ working tree hiện tại)
 #   ./deploy.sh --no-migrate
 #   ./deploy.sh --down               # docker compose down
+#   ./deploy.sh logs [-f] [service …] # docker compose logs (ngắn gọn)
+#   ./deploy.sh ps                   # docker compose ps
 #   BACKEND_HOST_PORT=7000 ./deploy.sh
 # ============================================================================
 
@@ -23,12 +25,71 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT}"
 
-COMPOSE=(
-  compose
+# Dùng chung cho plugin `docker compose` (khuyến nghị) hoặc lệnh `docker-compose` cũ.
+STACK_COMPOSE_COMMON=(
   --project-name automation-stack
-  -f docker-compose.yml
-  -f docker-compose.deploy.yml
+  -f "${ROOT}/docker-compose.yml"
+  -f "${ROOT}/docker-compose.deploy.yml"
 )
+
+STACK_COMPOSE_MODE=""
+
+detect_compose_driver() {
+  if docker compose version >/dev/null 2>&1; then
+    STACK_COMPOSE_MODE="docker_compose_plugin"
+    return 0
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
+    STACK_COMPOSE_MODE="docker_compose_binary"
+    return 0
+  fi
+
+  return 1
+}
+
+stack_compose() {
+  case "${STACK_COMPOSE_MODE}" in
+    docker_compose_plugin)
+      docker compose "${STACK_COMPOSE_COMMON[@]}" "$@"
+      ;;
+    docker_compose_binary)
+      docker-compose "${STACK_COMPOSE_COMMON[@]}" "$@"
+      ;;
+    *)
+      echo "[deploy] Không có Docker Compose: cần 'docker compose' (plugin v2)" >&2
+      echo "        hoặc lệnh 'docker-compose'. Ví dụ Ubuntu: sudo apt install docker-compose-plugin" >&2
+      exit 1
+      ;;
+  esac
+}
+
+need_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "[deploy] Thiếu lệnh: $1." >&2
+    exit 1
+  fi
+}
+
+need_cmd docker
+if ! detect_compose_driver; then
+  echo "[deploy] Chưa cài Compose: thử 'sudo apt install docker-compose-plugin'" >&2
+  echo "       hoặc cài standalone: apt install docker-compose" >&2
+  exit 1
+fi
+
+SUB="${1:-}"
+if [[ "${SUB}" == logs ]]; then
+  shift
+  stack_compose logs "$@"
+  exit 0
+fi
+
+if [[ "${SUB}" == ps ]]; then
+  shift
+  stack_compose ps "$@"
+  exit 0
+fi
 
 RUN_MIGRATE=1
 GIT_PULL=1
@@ -45,7 +106,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --down|down)
       echo "[deploy] Dừng stack..."
-      docker "${COMPOSE[@]}" down --remove-orphans
+      stack_compose down --remove-orphans
       exit 0
       ;;
     --help|-h)
@@ -56,9 +117,14 @@ deploy.sh — Docker stack Automation (PostgreSQL + Redis + API + scheduler)
   ./deploy.sh --no-pull      không git pull trước khi deploy
   ./deploy.sh --no-migrate   bỏ bước migrate
   ./deploy.sh --down         docker compose down
-  BACKEND_HOST_PORT=7000 ./deploy.sh  — map cổng host 7000 → API :6000 trong container
+  ./deploy.sh logs -f backend   xem log backend (cùng -p / -f compose deploy)
+  ./deploy.sh logs --tail 100 postgres
+  ./deploy.sh ps               trạng thái các service
 
-Cần: env/stack.backend.env (copy từ .example).
+Viết tay (nếu có plugin): docker compose --project-name automation-stack \\
+  -f docker-compose.yml -f docker-compose.deploy.yml logs -f backend
+
+Cần env/stack.backend.env chỉ khi deploy (pull/build/up). Logs/ps không bắt buộc.
 USAGE
       exit 0
       ;;
@@ -68,19 +134,6 @@ USAGE
       ;;
   esac
 done
-
-need_cmd() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "[deploy] Thiếu lệnh: $1 — cần Docker + Compose v2 plugin." >&2
-    exit 1
-  fi
-}
-
-need_cmd docker
-if ! docker compose version >/dev/null 2>&1; then
-  echo "[deploy] Cần 'docker compose' (plugin v2)." >&2
-  exit 1
-fi
 
 STACK_ENV="${ROOT}/env/stack.backend.env"
 if [[ ! -f "${STACK_ENV}" ]]; then
@@ -105,35 +158,35 @@ fi
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
 
 echo "[deploy] Docker build..."
-docker "${COMPOSE[@]}" build --pull
+stack_compose build --pull
 
 echo "[deploy] PostgreSQL + Redis..."
-docker "${COMPOSE[@]}" up -d postgres redis
+stack_compose up -d postgres redis
 
 echo "[deploy] Chờ PostgreSQL sẵn sàng..."
 for _ in $(seq 1 40); do
-  if docker "${COMPOSE[@]}" exec -T postgres pg_isready -U automation_admin -d automation_store >/dev/null 2>&1; then
+  if stack_compose exec -T postgres pg_isready -U automation_admin -d automation_store >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
-if ! docker "${COMPOSE[@]}" exec -T postgres pg_isready -U automation_admin -d automation_store >/dev/null 2>&1; then
-  echo "[deploy] Postgres chưa sẵn sàng sau khi chờ — xem docker compose logs postgres" >&2
+if ! stack_compose exec -T postgres pg_isready -U automation_admin -d automation_store >/dev/null 2>&1; then
+  echo "[deploy] Postgres chưa sẵn sàng sau khi chờ — thử ./deploy.sh logs postgres" >&2
   exit 1
 fi
 
 if [[ "${RUN_MIGRATE}" -eq 1 ]]; then
   echo "[deploy] Migrations knex..."
-  docker "${COMPOSE[@]}" run --rm backend npx knex migrate:latest
+  stack_compose run --rm backend npx knex migrate:latest
 fi
 
 echo "[deploy] Backend + scheduler..."
-docker "${COMPOSE[@]}" up -d backend scheduler
+stack_compose up -d backend scheduler
 
 echo "[deploy] Hoàn thành. Trạng thái:"
-docker "${COMPOSE[@]}" ps
+stack_compose ps
 
 HP="${BACKEND_HOST_PORT:-6000}"
 echo ""
 echo "[deploy] API từ host: http://127.0.0.1:${HP}  → container :6000"
-echo "       Logs: docker ${COMPOSE[*]} logs -f backend"
+echo "       Logs: ./deploy.sh logs -f backend"
