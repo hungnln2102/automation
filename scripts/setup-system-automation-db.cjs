@@ -38,7 +38,7 @@ if (!databaseUrl) {
 }
 
 const { Client } = require(path.join(root, "apps", "backend", "node_modules", "pg"));
-const bcrypt = require(path.join(root, "apps", "backend", "node_modules", "bcryptjs"));
+const bcrypt = require(path.join(root, "apps", "backend", "node_modules", "bcrypt"));
 
 const defaultAdminUser =
   process.env.DEFAULT_ADMIN_USER || readEnvValue(envFile, "DEFAULT_ADMIN_USER");

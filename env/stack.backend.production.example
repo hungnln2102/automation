@@ -37,8 +37,9 @@ SESSION_NAME=automation.sid
 DISABLE_CSRF=false
 
 # ---------- PostgreSQL ----------
-# Thay USER/PASS/HOST/DB — host Docker nội bộ thường là "postgres"; host VPS: 127.0.0.1
-DATABASE_URL=postgresql://automation_admin:REPLACE_PASSWORD@127.0.0.1:5432/automation_store
+# Backend trong Docker: compose ghi đè → postgres:5432 (tên service).
+# Chạy Node/pg_dump trên HOST VPS (hoặc Beekeeper tunnel): 127.0.0.1:6432 (map trong docker-compose.yml).
+DATABASE_URL=postgresql://automation_admin:REPLACE_PASSWORD@127.0.0.1:6432/automation_store
 DB_SCHEMA_FINANCE=finance
 DEFAULT_ADMIN_USER=admin
 DEFAULT_ADMIN_PASS=REPLACE_STRONG_ADMIN_PASSWORD
@@ -51,8 +52,10 @@ DB_RAW_POOL_MAX=5
 DB_CONNECTION_TIMEOUT_MS=15000
 
 # ---------- Redis (session / queue) — khuyến nghị bật production ----------
+# Trên host VPS (ngoài Docker): map 6480 → container 6379 — xem docker-compose.yml.
+# Trong container: compose ghi đè → redis://redis:6379
 REDIS_ENABLED=true
-REDIS_URL=redis://127.0.0.1:6379/0
+REDIS_URL=redis://127.0.0.1:6480/0
 
 # ---------- Scheduler (scheduler.js) ----------
 CRON_SCHEDULE=1 0 * * *

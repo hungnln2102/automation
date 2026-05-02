@@ -1,5 +1,6 @@
 const crypto = require("crypto");
-const bcrypt = require("bcryptjs");
+/** Native bcrypt (~nhanh hơn bcryptjs đáng kể trên VPS khi POST /login so khớp mật khẩu). */
+const bcrypt = require("bcrypt");
 const { db } = require("../../db");
 const {
   ADMIN_SCHEMA,
@@ -12,6 +13,19 @@ const logger = require("../../utils/logger");
 
 const USERS_DEF = getDefinition("USERS", ADMIN_SCHEMA);
 const USERS_TABLE = tableName(USERS_DEF.tableName, SCHEMA_ADMIN);
+
+/** Cost cho hash *mới* (compare vẫn dùng cost ghi trong hash cũ). Env BCRYPT_COST 4–12, mặc định 10. */
+function bcryptSaltRounds() {
+  const n = Number.parseInt(process.env.BCRYPT_COST || "", 10);
+  if (Number.isFinite(n) && n >= 4 && n <= 12) {
+    return n;
+  }
+  return 10;
+}
+
+async function hashPasswordPlain(plain) {
+  return bcrypt.hash(String(plain), bcryptSaltRounds());
+}
 
 /**
  * So sánh mật khẩu với hash đã lưu.
@@ -45,7 +59,7 @@ const verifyPassword = async (inputPassword, storedValue) => {
 const upgradePasswordHash = async (userId, plainPassword) => {
   try {
     const userCols = USERS_DEF.columns;
-    const newHash = await bcrypt.hash(String(plainPassword), 10);
+    const newHash = await hashPasswordPlain(plainPassword);
     await db(USERS_TABLE)
       .where(userCols.id, userId)
       .update({ [userCols.password]: newHash });
@@ -186,7 +200,7 @@ const changePassword = async (req, res) => {
       return res.status(401).json({ error: "Mật khẩu hiện tại không đúng" });
     }
 
-    const newHash = await bcrypt.hash(String(newPassword), 10);
+    const newHash = await hashPasswordPlain(newPassword);
     await db(USERS_TABLE)
       .where(userCols.id, user.userid)
       .update({ [userCols.password]: newHash });
@@ -215,7 +229,7 @@ const ensureDefaultAdmin = async () => {
 
     await db(USERS_TABLE).insert({
       [userCols.username]: usernameEnv,
-      [userCols.password]: await bcrypt.hash(passwordEnv, 10),
+      [userCols.password]: await hashPasswordPlain(passwordEnv),
       [userCols.role]: "admin",
     });
     logger.info(`[AUTH] Đã tạo người dùng quản trị`, { username: usernameEnv });

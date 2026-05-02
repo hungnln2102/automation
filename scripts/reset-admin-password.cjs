@@ -1,4 +1,4 @@
-const bcrypt = require("../apps/backend/node_modules/bcryptjs");
+const bcrypt = require("../apps/backend/node_modules/bcrypt");
 const { Client } = require("../apps/backend/node_modules/pg");
 
 const username = process.argv[2] || "admin";
@@ -11,7 +11,7 @@ if (!password) {
 
 const connectionString =
   process.env.DATABASE_URL ||
-  "postgresql://automation_admin:automation_admin_dev@127.0.0.1:5438/automation_store";
+  "postgresql://automation_admin:automation_admin_dev@127.0.0.1:6432/automation_store";
 
 async function main() {
   const passwordHash = await bcrypt.hash(password, 10);

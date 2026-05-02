@@ -36,7 +36,7 @@ Trên VPS, sinh bcrypt (ví dụ mật khẩu mới là `MatKhauMoi365`):
 
 ```bash
 docker exec automation-stack-backend node -e "
-  require('bcryptjs').hash('MatKhauMoi365', 10).then(h => console.log(h));
+  require('bcrypt').hash('MatKhauMoi365', 10).then(h => console.log(h));
 "
 ```
 

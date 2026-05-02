@@ -13,10 +13,13 @@ PUBLIC_BASE_URL=http://otp90.com
 
 # Giai đoạn HTTP hoặc hỗn hợp HTTP/HTTPS: dùng auto. Chỉ dùng true sau khi mọi truy cập admin là HTTPS.
 COOKIE_SECURE=auto
-DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/automation_store
+
+# Postgres stack trên HOST VPS (tool/script trên máy chủ): 127.0.0.1:6432 — Xem docker-compose.yml.
+# Container backend dùng redis/postgres Docker (compose ghi đè DATABASE_URL/REDIS_URL).
+DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:6432/automation_store
 
 REDIS_ENABLED=true
-REDIS_URL=redis://127.0.0.1:6379
+REDIS_URL=redis://127.0.0.1:6480
 
 APP_TIMEZONE=Asia/Ho_Chi_Minh
 
