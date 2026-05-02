@@ -34,11 +34,16 @@ describe("appConfig CORS origins", () => {
 
     const { allowedOrigins, normalizeOrigin } = require("../../../src/config/appConfig");
 
-    expect(allowedOrigins).toEqual([
-      "https://admin.mavrykpremium.store",
-      "https://www.mavrykpremium.store",
-      "https://mavrykpremium.store",
-    ]);
+    expect(allowedOrigins.sort()).toEqual(
+      [
+        "http://admin.mavrykpremium.store",
+        "http://www.mavrykpremium.store",
+        "http://mavrykpremium.store",
+        "https://admin.mavrykpremium.store",
+        "https://www.mavrykpremium.store",
+        "https://mavrykpremium.store",
+      ].sort(),
+    );
     expect(normalizeOrigin("https://www.mavrykpremium.store/")).toBe(
       "https://www.mavrykpremium.store"
     );
@@ -54,9 +59,10 @@ describe("appConfig CORS origins", () => {
     expect(allowedOrigins).toEqual(
       expect.arrayContaining([
         "https://admin.example.test",
+        "http://admin.example.test",
         "http://localhost:4001",
         "http://127.0.0.1:4001",
-      ])
+      ]),
     );
   });
 });

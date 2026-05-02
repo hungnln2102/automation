@@ -23,6 +23,44 @@ const normalizeOrigin = (origin) => {
   }
 };
 
+/** Cùng host, đổi http ↔ https (chỉ khai báo một bên trong FRONTEND_ORIGINS vẫn cho CORS qua). */
+const alternateProtocolSameHostOrigin = (origin) => {
+  try {
+    const u = new URL(origin);
+    if (u.protocol === "https:") {
+      return `http://${u.host}`;
+    }
+
+    if (u.protocol === "http:") {
+      return `https://${u.host}`;
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+};
+
+const mirrorHttpHttpsPeers = (origins) => {
+  if (
+    ["1", "true", "yes"].includes(
+      String(process.env.FRONTEND_ORIGINS_STRICT_PROTOCOL || "").trim().toLowerCase(),
+    )
+  ) {
+    return origins;
+  }
+
+  const peers = [];
+  for (const o of origins) {
+    const p = normalizeOrigin(alternateProtocolSameHostOrigin(o));
+    if (p && p !== o) {
+      peers.push(p);
+    }
+  }
+
+  return Array.from(new Set([...origins, ...peers])).filter(Boolean);
+};
+
 const isProd = process.env.NODE_ENV === "production";
 
 /** Origins từ env (hoặc mặc định admin Vite + Website Vite khi chưa set). */
@@ -54,7 +92,9 @@ const devOriginExtras = isProd
       .map(normalizeOrigin)
       .filter(Boolean);
 
-const allowedOrigins = Array.from(new Set([...fromEnv, ...devOriginExtras]));
+const allowedOrigins = mirrorHttpHttpsPeers(
+  Array.from(new Set([...fromEnv, ...devOriginExtras])).filter(Boolean),
+);
 const allowedOriginSet = new Set(allowedOrigins);
 
 const sessionName =
