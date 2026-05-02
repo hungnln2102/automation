@@ -4,15 +4,15 @@
 NODE_ENV=production
 PORT=6000
 
-# Cả admin + apex (form check trên otp90.com cùng gọi /api hoặc CORS hoá trên subdomain).
-FRONTEND_ORIGINS=https://admin.otp90.com,https://otp90.com,https://www.otp90.com
+# Origin phải khớp URL trình duyệt (kể cả http vs https).
+# Đang dùng http://admin... trước SSL → thêm bản http; sau Certbot có thể chỉ giữ https.
+FRONTEND_ORIGINS=http://admin.otp90.com,http://otp90.com,http://www.otp90.com,https://admin.otp90.com,https://otp90.com,https://www.otp90.com
 
-# Trang chủ / form công khai (tuỳ bạn chỉnh HTTPS redirect www → apex trong Nginx)
-PUBLIC_BASE_URL=https://otp90.com
+# PUBLIC_BASE_URL theo URL người dùng hay thấy (đổi sang https sau SSL).
+PUBLIC_BASE_URL=http://otp90.com
 
-# HTTPS: để session/csrf hoạt động đúng.
-COOKIE_SECURE=true
-
+# Giai đoạn HTTP hoặc hỗn hợp HTTP/HTTPS: dùng auto. Chỉ dùng true sau khi mọi truy cập admin là HTTPS.
+COOKIE_SECURE=auto
 DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/automation_store
 
 REDIS_ENABLED=true

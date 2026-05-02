@@ -22,11 +22,12 @@ PORT=6000
 # Canonical site (vd. otp90.com) hoặc admin — tuỳ nơi bạn đặt link trong email/metadata.
 PUBLIC_BASE_URL=https://otp90.com
 
-# HTTPS + domain dashboard + form công khai trên otp90.com (nginx deploy/nginx/otp90-automation.conf).
-FRONTEND_ORIGINS=https://admin.otp90.com,https://otp90.com,https://www.otp90.com
+# HTTPS + đủ bản HTTP nếu còn thử chỉ có http://… (không có SSL) — không khớp giao thức → "Blocked by CORS".
+FRONTEND_ORIGINS=http://admin.otp90.com,http://otp90.com,http://www.otp90.com,https://admin.otp90.com,https://otp90.com,https://www.otp90.com
 
-# Prod HTTPS: để cookie session/csrf có secure khi chỉ có https:// trong FRONTEND_ORIGINS
-COOKIE_SECURE=true
+# HTTPS-only production: chỉnh về chỉ các https:// và COOKIE_SECURE=true.
+# Prod sau Certbot có thể: FRONTEND_ORIGINS=https://admin.otp90.com,... ; COOKIE_SECURE=true
+COOKIE_SECURE=auto
 
 # Bắt buộc (appConfig thoát tiến trình nếu default): random 48+ bytes hex
 SESSION_SECRET=PASTE_STRONG_HEX_HERE
