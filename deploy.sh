@@ -11,7 +11,8 @@
 #
 # Usage:
 #   chmod +x deploy.sh
-#   ./deploy.sh                      # build, migrate, start API + scheduler
+#   ./deploy.sh                      # git pull (--ff-only), build, migrate, start API + scheduler
+#   ./deploy.sh --no-pull            # không kéo code (deploy từ working tree hiện tại)
 #   ./deploy.sh --no-migrate
 #   ./deploy.sh --down               # docker compose down
 #   BACKEND_HOST_PORT=7000 ./deploy.sh
@@ -30,11 +31,16 @@ COMPOSE=(
 )
 
 RUN_MIGRATE=1
+GIT_PULL=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-migrate)
       RUN_MIGRATE=0
+      shift
+      ;;
+    --no-pull)
+      GIT_PULL=0
       shift
       ;;
     --down|down)
@@ -46,7 +52,8 @@ while [[ $# -gt 0 ]]; do
       cat <<'USAGE'
 deploy.sh — Docker stack Automation (PostgreSQL + Redis + API + scheduler)
 
-  ./deploy.sh                build, migrate knex, start api + scheduler
+  ./deploy.sh                git pull, build, migrate knex, start api + scheduler
+  ./deploy.sh --no-pull      không git pull trước khi deploy
   ./deploy.sh --no-migrate   bỏ bước migrate
   ./deploy.sh --down         docker compose down
   BACKEND_HOST_PORT=7000 ./deploy.sh  — map cổng host 7000 → API :6000 trong container
@@ -82,6 +89,17 @@ if [[ ! -f "${STACK_ENV}" ]]; then
   echo "          hoặc: cp env/stack.backend.production.example env/stack.backend.env"
   echo "          rồi chỉnh SESSION_SECRET, FRONTEND_ORIGINS, ..."
   exit 1
+fi
+
+if [[ "${GIT_PULL}" -eq 1 ]]; then
+  if [[ ! -d "${ROOT}/.git" ]]; then
+    echo "[deploy] Bỏ qua git pull (thư mục không phải clone git)."
+  else
+    need_cmd git
+    echo "[deploy] Git pull (fast-forward only)..."
+    git -C "${ROOT}" fetch --quiet --tags --prune
+    git -C "${ROOT}" pull --ff-only
+  fi
 fi
 
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
