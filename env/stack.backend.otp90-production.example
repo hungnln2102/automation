@@ -1,0 +1,27 @@
+# Mẫu production — copy thành `stack.backend.env` trên VPS (hoặc merge vào .env systemd).
+# Nginx: `deploy/nginx/otp90-automation-admin.conf`
+
+NODE_ENV=production
+PORT=6000
+
+# Dashboard SPA đang serve tại origin này (bắt buộc cho CORS + cookie).
+FRONTEND_ORIGINS=https://admin.otp90.com,http://admin.otp90.com
+
+# URL công khai của API sau reverse proxy (cùng host admin hoặc subdomain riêng).
+PUBLIC_BASE_URL=https://admin.otp90.com
+
+# HTTPS: để session/csrf hoạt động đúng.
+COOKIE_SECURE=true
+
+DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/automation_store
+
+REDIS_ENABLED=true
+REDIS_URL=redis://127.0.0.1:6379
+
+APP_TIMEZONE=Asia/Ho_Chi_Minh
+
+# Sinh khóa: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+SESSION_SECRET=
+
+# Tuỳ chọn: khóa POST /api/renew-adobe/public/activate — nếu bật, frontend build cần VITE_RENEW_ADOBE_PUBLIC_API_KEY trùng.
+# RENEW_ADOBE_PUBLIC_API_KEY=
