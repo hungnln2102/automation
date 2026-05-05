@@ -1,33 +1,3 @@
-# Mẫu production — copy thành `stack.backend.env` trên VPS (hoặc merge vào .env systemd).
-# Nginx: `deploy/nginx/otp90-automation.conf` (có server `api.otp90.com` → upstream :6000).
-#
-# Frontend production: trong apps/frontend tạo `.env.production` từ `.env.production.example`
-# (VITE_API_BASE_URL=https://api.otp90.com), rồi `pnpm build` / `npm run build`.
-
-NODE_ENV=production
-PORT=6000
-
-# Origin phải khớp URL trình duyệt (kể cả http vs https).
-# Đang dùng http://admin... trước SSL → thêm bản http; sau Certbot có thể chỉ giữ https.
-FRONTEND_ORIGINS=http://admin.otp90.com,http://otp90.com,http://www.otp90.com,https://admin.otp90.com,https://otp90.com,https://www.otp90.com
-
-# PUBLIC_BASE_URL theo URL người dùng hay thấy (đổi sang https sau SSL).
-PUBLIC_BASE_URL=http://otp90.com
-
-# Giai đoạn HTTP hoặc hỗn hợp HTTP/HTTPS: dùng auto. Chỉ dùng true sau khi mọi truy cập admin là HTTPS.
-COOKIE_SECURE=auto
-
-# Postgres stack trên HOST VPS (tool/script trên máy chủ): 127.0.0.1:6432 — Xem docker-compose.yml.
-# Container backend dùng redis/postgres Docker (compose ghi đè DATABASE_URL/REDIS_URL).
-DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:6432/automation_store
-
-REDIS_ENABLED=true
-REDIS_URL=redis://127.0.0.1:6480
-
-APP_TIMEZONE=Asia/Ho_Chi_Minh
-
-# Sinh khóa: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
-SESSION_SECRET=
-
-# Tuỳ chọn: khóa POST /api/renew-adobe/public/activate — nếu bật, frontend build cần VITE_RENEW_ADOBE_PUBLIC_API_KEY trùng.
-# RENEW_ADOBE_PUBLIC_API_KEY=
+# (Đã chuyển) Mẫu otp90 — xem:
+#   apps/backend/env.otp90-production.example
+# Merge vào apps/backend/.env.docker trên VPS.

@@ -5,7 +5,7 @@ const backendRoot = path.join(__dirname, "..", "..");
 
 /** File gốc (tùy chọn): biến dùng chung, không chứa secret có thể commit qua `.env.example` → copy thành `.env`. */
 const FILE_SHARED = ".env";
-/** Production / Docker: `docker-compose` mount `backend/.env.docker` hoặc copy từ `env.docker.example`. */
+/** Production / Docker: file `apps/backend/.env.docker` (compose env_file) — mẫu `env.docker.example`. */
 const FILE_DOCKER = ".env.docker";
 /** Local dev: copy từ `env.local.example` → `backend/.env.local`. */
 const FILE_LOCAL = ".env.local";
@@ -23,12 +23,11 @@ const configEnvFile = (fileName, options = {}) =>
   });
 
 /**
- * Thứ tự nạp biến môi trường:
+ * Thứ tự nạp biến môi trường (ứng dụng chạy từ apps/backend):
  * - Luôn thử `.env` trước (mỏng, không bắt buộc tồn tại).
- * - Production-like: **`.env.docker`** — chỉ điền chỗ trống (**override: false**). Biến đã có (Docker
- *   Compose `env_file`, systemd `Environment=`, `docker run -e …`) phải được giữ để tránh ghi đè
- *   `FRONTEND_ORIGINS`, `DATABASE_URL`, v.v. — lỗi CORS khi server vẫn dùng mặc định localhost của file.
- * - Còn lại (dev/test local): **`.env.local`** ghi đè.
+ * - Production-like (production / docker): `.env.docker` — chỉ điền chỗ trống (**override: false**).
+ *   Docker Compose mount `apps/backend/.env.docker` qua env_file; biến đã có trên process không bị ghi đè.
+ * - Còn lại (dev/test local): `.env.local` ghi đè.
  * - `BACKEND_ENV_FILE` hoặc `DOTENV_CONFIG_PATH`: đường dẫn file đơn lẻ, override toàn bộ logic trên.
  */
 function loadBackendEnv() {

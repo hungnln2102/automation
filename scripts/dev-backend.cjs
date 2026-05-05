@@ -1,11 +1,5 @@
 const { spawn } = require("child_process");
-const {
-  backendRoot,
-  stackEnvFile,
-  requireStackEnvExists,
-} = require("./paths.cjs");
-
-requireStackEnvExists();
+const { backendRoot } = require("./paths.cjs");
 
 const isWin = process.platform === "win32";
 const npmCmd = isWin ? "npm.cmd" : "npm";
@@ -18,7 +12,6 @@ const child = spawn(
     stdio: "inherit",
     env: {
       ...process.env,
-      BACKEND_ENV_FILE: stackEnvFile,
     },
     shell: isWin,
   }

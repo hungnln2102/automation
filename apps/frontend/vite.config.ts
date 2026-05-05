@@ -10,12 +10,13 @@ export default defineConfig(({ mode }) => {
     esbuild: UserConfig["esbuild"],
     define: UserConfig["define"];
 
-  const env = loadEnv(mode, process.cwd(), "");
+  const frontendPath = resolve(dirname(fileURLToPath(import.meta.url)));
+  /** Luôn đọc .env* trong apps/frontend dù cwd khi chạy CLI khác. */
+  const env = loadEnv(mode, frontendPath, "");
   const apiProxyTarget =
     env.VITE_API_PROXY_TARGET ||
     process.env.VITE_API_PROXY_TARGET ||
     "http://localhost:6000";
-  const frontendPath = resolve(dirname(fileURLToPath(import.meta.url)));
   const rootPath = resolve(frontendPath, "..");
   const sharedPath = resolve(rootPath, "shared");
 
@@ -63,6 +64,7 @@ export default defineConfig(({ mode }) => {
   return {
     // Base path for assets - critical for production deployment
     base: '/',
+    envDir: frontendPath,
     plugins: [react()],
     build,
     esbuild,

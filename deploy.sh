@@ -3,7 +3,8 @@
 # Automation — khởi động / cập nhật stack Docker (Postgres + Redis + API + scheduler)
 #
 # Chuẩn bị trên VPS (một lần):
-#   cp env/stack.backend.env.example env/stack.backend.env
+#   npm run bootstrap
+#   hoặc: cp apps/backend/env.docker.example apps/backend/.env.docker
 #   chỉnh SESSION_SECRET, FRONTEND_ORIGINS, PUBLIC_BASE_URL, ...
 #
 # Docker: API luôn lắng nghe cổng 6000 trong container — Nginx/host map tới
@@ -124,7 +125,7 @@ deploy.sh — Docker stack Automation (PostgreSQL + Redis + API + scheduler)
 Viết tay (nếu có plugin): docker compose --project-name automation-stack \\
   -f docker-compose.yml -f docker-compose.deploy.yml logs -f backend
 
-Cần env/stack.backend.env chỉ khi deploy (pull/build/up). Logs/ps không bắt buộc.
+Cần apps/backend/.env.docker khi deploy (pull/build/up). Logs/ps không bắt buộc.
 USAGE
       exit 0
       ;;
@@ -135,11 +136,12 @@ USAGE
   esac
 done
 
-STACK_ENV="${ROOT}/env/stack.backend.env"
+STACK_ENV="${ROOT}/apps/backend/.env.docker"
 if [[ ! -f "${STACK_ENV}" ]]; then
   echo "[deploy] Không có ${STACK_ENV}"
-  echo "       -> cp env/stack.backend.env.example env/stack.backend.env"
-  echo "          hoặc: cp env/stack.backend.production.example env/stack.backend.env"
+  echo "       -> npm run bootstrap   (hoặc cp apps/backend/env.docker.example apps/backend/.env.docker)"
+  echo "          Mẫu đầy đủ: apps/backend/env.docker.production.example"
+  echo "          otp90: apps/backend/env.otp90-production.example"
   echo "          rồi chỉnh SESSION_SECRET, FRONTEND_ORIGINS, ..."
   exit 1
 fi

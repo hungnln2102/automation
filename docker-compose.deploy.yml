@@ -1,8 +1,9 @@
 # Ghép với docker-compose.yml — chạy: ./deploy.sh
-# API + scheduler Renew Adobe — cần stack env (DATABASE/REDIS nội bộ ghi đè tại đây).
+# API + scheduler — secrets / CORS: apps/backend/.env.docker (npm run bootstrap).
+# DATABASE_URL / REDIS_URL trong container do `environment` bên dưới ghi đè.
 #
-# prerequisites: cp env/stack.backend.env.example env/stack.backend.env và chỉnh SESSION_SECRET,
-# FRONTEND_ORIGINS, PUBLIC_BASE_URL, v.v. (PostgreSQL trong Docker dùng host `postgres`.)
+# prerequisites: cp apps/backend/env.docker.example apps/backend/.env.docker và chỉnh SESSION_SECRET,
+# FRONTEND_ORIGINS, … (PostgreSQL trong Docker dùng service `postgres`.)
 
 services:
   backend:
@@ -18,7 +19,7 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - ./env/stack.backend.env
+      - ./apps/backend/.env.docker
     environment:
       NODE_ENV: production
       APP_ENV: docker
@@ -47,7 +48,7 @@ services:
       backend:
         condition: service_started
     env_file:
-      - ./env/stack.backend.env
+      - ./apps/backend/.env.docker
     environment:
       NODE_ENV: production
       APP_ENV: docker

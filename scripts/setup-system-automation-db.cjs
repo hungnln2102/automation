@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const envFile = path.join(root, "env", "stack.backend.env");
+const backendRoot = path.join(root, "apps", "backend");
 const sqlFile = path.join(
   root,
   "schema",
@@ -11,11 +11,11 @@ const sqlFile = path.join(
   "000_system_automation_only.sql"
 );
 
-function readEnvValue(filePath, key) {
-  if (!fs.existsSync(filePath)) return "";
+function parseEnvFile(filePath) {
+  const out = {};
+  if (!fs.existsSync(filePath)) return out;
 
-  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
-  for (const line of lines) {
+  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
 
@@ -23,17 +23,32 @@ function readEnvValue(filePath, key) {
     if (eqIndex < 0) continue;
 
     const name = trimmed.slice(0, eqIndex).trim();
-    if (name === key) {
-      return trimmed.slice(eqIndex + 1).trim();
+    let val = trimmed.slice(eqIndex + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
     }
+    out[name] = val;
   }
-
-  return "";
+  return out;
 }
 
-const databaseUrl = process.env.DATABASE_URL || readEnvValue(envFile, "DATABASE_URL");
+/** Khớp loadBackendEnv (dev): .env rồi .env.local ghi đè — không đọc env/ ở repo root. */
+function mergedBackendEnvFromFiles() {
+  const base = parseEnvFile(path.join(backendRoot, ".env"));
+  const local = parseEnvFile(path.join(backendRoot, ".env.local"));
+  return { ...base, ...local };
+}
+
+const fileEnv = mergedBackendEnvFromFiles();
+
+const databaseUrl = process.env.DATABASE_URL || fileEnv.DATABASE_URL;
 if (!databaseUrl) {
-  console.error("[setup-system-automation-db] Missing DATABASE_URL.");
+  console.error(
+    "[setup-system-automation-db] Missing DATABASE_URL (env hoặc apps/backend/.env / .env.local)."
+  );
   process.exit(1);
 }
 
@@ -41,9 +56,9 @@ const { Client } = require(path.join(root, "apps", "backend", "node_modules", "p
 const bcrypt = require(path.join(root, "apps", "backend", "node_modules", "bcrypt"));
 
 const defaultAdminUser =
-  process.env.DEFAULT_ADMIN_USER || readEnvValue(envFile, "DEFAULT_ADMIN_USER");
+  process.env.DEFAULT_ADMIN_USER || fileEnv.DEFAULT_ADMIN_USER;
 const defaultAdminPass =
-  process.env.DEFAULT_ADMIN_PASS || readEnvValue(envFile, "DEFAULT_ADMIN_PASS");
+  process.env.DEFAULT_ADMIN_PASS || fileEnv.DEFAULT_ADMIN_PASS;
 
 async function main() {
   const client = new Client({ connectionString: databaseUrl });

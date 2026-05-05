@@ -12,7 +12,7 @@ apps/
 packages/
   adobe-renew/    Renew Adobe reference snapshot and notes only
 scripts/          Root orchestration scripts
-env/              Workspace-level env overrides
+env/              Ghi chú / connect DB — không còn file stack env tại đây
 schema/           Schema reference material
 docs/             Architecture and maintenance notes
 var/              Local runtime logs and generated output
@@ -33,4 +33,6 @@ Frontend: `http://localhost:6001`
 
 Backend: `http://localhost:6000`
 
-`env/stack.backend.env` is applied on top of `apps/backend/.env`.
+Backend đọc `apps/backend/.env` rồi `.env.local` (dev) hoặc `.env.docker` (production / Docker).  
+Frontend: `apps/frontend/.env*` — xem `.env.example` và `.env.production.example`.  
+Deploy Docker: `apps/backend/.env.docker` (`npm run bootstrap`).

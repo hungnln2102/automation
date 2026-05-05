@@ -8,7 +8,7 @@ Backend **đã kết nối DB** nếu log có dòng kiểu “Database thành c�
 
 ### Tự tạo user lần đầu (`ensureDefaultAdmin`)
 
-Trong **`env/stack.backend.env`** trên VPS phải có **cả hai** (không để placeholder):
+Trong **`apps/backend/.env.docker`** trên VPS phải có **cả hai** (không để placeholder):
 
 ```bash
 DEFAULT_ADMIN_USER=admin
@@ -20,7 +20,7 @@ DEFAULT_ADMIN_PASS=đặt_mật_khẩu_mạnh_rời_rạc_của_bạn
 
 **Cách A — Xóa user cũ rồi để backend tạo lại**
 
-1. Sửa `DEFAULT_ADMIN_*` trong `stack.backend.env` như trên (mật khẩu mới mong muốn).
+1. Sửa `DEFAULT_ADMIN_*` trong `apps/backend/.env.docker` như trên (mật khẩu mới mong muốn).
 2. Vào Postgres (TablePlus SSH tunnel như **`env/CONNECT_DATABASE.md`**), chạy SQL (đổi `admin`/`schema` nếu khác):
 
 ```sql
@@ -62,18 +62,18 @@ docker compose --project-name automation-stack -f docker-compose.yml -f docker-c
 
 Việc cần làm:
 
-1. Máy build (hoặc CI): vào **`apps/frontend`**, **`pnpm build`** / **`npm run build`** với **`.env.production`** có `VITE_API_BASE_URL=` trống.
+1. Máy build (hoặc CI): vào **`apps/frontend`**, **`pnpm build`** / **`npm run build`** với **`.env.production`**: hoặc `VITE_API_BASE_URL=` trống (cùng host + Nginx `/api/...`), hoặc `VITE_API_BASE_URL=https://api.otp90.com` nếu API subdomain riêng.
 2. Upload **`apps/frontend/dist`** lên chỗ Nginx **`root`** cho `admin.otp90.com`.
 3. Trình duyệt **Ctrl+F5** / xóa cache / thử tab ẩn danh.
 
-Sau đó chỉ nên thấy request tới **`https:// hoặc http://admin.otp90.com/api/...`**, không còn `localhost:3001`.
+Sau đó request tới **`https://admin.otp90.com/api/...`** hoặc **`https://api.otp90.com/api/...`** tuỳ cách build, không còn `localhost:3001`.
 
 ## 3. Chuỗi thao tác tóm tắt VPS
 
 ```bash
 cd /đường/dẫn/repo/Automation
 git pull                          # hoặc ./deploy.sh (có git pull)
-# Sửa env/stack.backend.env: DEFAULT_ADMIN_*, FRONTEND_ORIGINS, SESSION_SECRET đã chỉnh đúng chưa
+# Sửa apps/backend/.env.docker: DEFAULT_ADMIN_*, FRONTEND_ORIGINS, SESSION_SECRET đã chỉnh đúng chưa
 ./deploy.sh --no-pull             # hoặc full ./deploy.sh
 ./deploy.sh logs -f backend       # đăng nhập thử, xem còn 500/CORS không
 ```
