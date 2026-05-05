@@ -1,5 +1,8 @@
 # Mẫu production — copy thành `stack.backend.env` trên VPS (hoặc merge vào .env systemd).
-# Nginx (admin + otp90.com): `deploy/nginx/otp90-automation.conf`
+# Nginx: `deploy/nginx/otp90-automation.conf` (có server `api.otp90.com` → upstream :6000).
+#
+# Frontend production: trong apps/frontend tạo `.env.production` từ `.env.production.example`
+# (VITE_API_BASE_URL=https://api.otp90.com), rồi `pnpm build` / `npm run build`.
 
 NODE_ENV=production
 PORT=6000

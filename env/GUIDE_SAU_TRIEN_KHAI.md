@@ -58,7 +58,7 @@ docker compose --project-name automation-stack -f docker-compose.yml -f docker-c
 
 ## 2. Console vẫn gọi `localhost:3001` — không phải lỗi DB
 
-Đó là **bản frontend build cũ** đang cố API local. Repo đã chỉnh: production với **`VITE_API_BASE_URL`** trống → gọi **`/api/...`** trên đúng host.
+Đó là **bản frontend build cũ** (hoặc build lúc còn set `VITE_API_BASE_URL` trỏ máy dev) đang cố API local. Repo đã chỉnh: production với **`VITE_API_BASE_URL`** trống → gọi **`/api/...`** trên đúng host; `client.ts` còn **tự bỏ base localhost** khi bạn đang mở site bằng domain thật (sau khi pull + build lại).
 
 Việc cần làm:
 

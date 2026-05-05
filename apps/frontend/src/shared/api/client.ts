@@ -1,6 +1,9 @@
 const isDev =
   typeof import.meta !== "undefined" && (import.meta as any).env?.DEV === true;
 
+const isProdBundle =
+  typeof import.meta !== "undefined" && (import.meta as any).env?.PROD === true;
+
 const RAW_API_BASE: string = (() => {
   if (isDev) return "";
 
@@ -16,9 +19,24 @@ const RAW_API_BASE: string = (() => {
       : "";
   if (envBase) return envBase;
 
-  // Build production: để trống → `/api/...` cùng origin (Nginx proxy). Fallback localhost làm sai domain trên VPS.
+  // Build production: để trống → `/api/...` cùng origin (Nginx path proxy).
+  // Hoặc set VITE_API_BASE_URL=https://api.otp90.com khi API ở subdomain riêng.
   return "";
 })();
+
+function looksLikeLocalDevHost(raw: string): boolean {
+  return /localhost|127\.0\.0\.1/i.test((raw || "").trim());
+}
+
+/** Build-time: không cho bundle production “dính” máy dev nếu .env sai. */
+function sanitizeProductionRaw(raw: string): string {
+  if (!isProdBundle) return raw;
+  const t = raw.trim();
+  if (t && looksLikeLocalDevHost(t)) return "";
+  return t;
+}
+
+const RAW_API_AFTER_SANITIZE = sanitizeProductionRaw(RAW_API_BASE);
 
 function normalizeBaseUrl(value: string): string {
   const normalized = (value || "").trim();
@@ -29,13 +47,24 @@ function normalizeBaseUrl(value: string): string {
   return normalized;
 }
 
-export const API_BASE_URL: string = normalizeBaseUrl(RAW_API_BASE);
+export const API_BASE_URL: string = normalizeBaseUrl(RAW_API_AFTER_SANITIZE);
+
+/** Base có hiệu lực trên browser: không bao giờ gọi localhost khi đang vào domain thật. */
+function effectiveApiBase(): string {
+  const base = API_BASE_URL;
+  if (typeof window === "undefined") return base;
+  const hostname = window.location.hostname;
+  if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+    if (looksLikeLocalDevHost(base)) return "";
+  }
+  return base;
+}
 
 let _csrfToken: string | null = null;
 
 const buildUrl = (input: string): string => {
   if (input.startsWith("http")) return input;
-  const base = API_BASE_URL.replace(/\/+$/, "");
+  const base = effectiveApiBase().replace(/\/+$/, "");
   const path = input.replace(/^\/+/, "");
   return `${base}/${path}`;
 };
@@ -83,7 +112,12 @@ export async function apiFetch(
     handleUnauthorized(input, res);
     return res;
   } catch (error) {
-    if (isDev && !input.startsWith("http")) {
+    const onLocalMachine =
+      typeof window === "undefined" ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+    // Chỉ retry backend cục bộ khi chạy Vite dev thật sự trên máy dev, không khi SPA dev lỗi trên domain public.
+    if (isDev && onLocalMachine && !input.startsWith("http")) {
       try {
         const res = await fetch(`http://127.0.0.1:3001/${input.replace(/^\/+/, "")}`, finalInit);
         captureCsrfToken(res);
