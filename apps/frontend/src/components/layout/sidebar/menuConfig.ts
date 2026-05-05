@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from "react";
 import {
   ArrowPathIcon,
   MagnifyingGlassIcon,
+  RectangleStackIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 
@@ -46,6 +47,11 @@ export const menuSections: MenuSection[] = [
         name: "Kiểm tra Profile (Renew)",
         href: "/renew-adobe-check",
         icon: MagnifyingGlassIcon,
+      },
+      {
+        name: "Đơn Renew (bàn làm việc)",
+        href: "/renew-orders",
+        icon: RectangleStackIcon,
       },
     ],
   },

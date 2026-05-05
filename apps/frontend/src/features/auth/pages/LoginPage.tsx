@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { LoginBackground } from "../components/LoginBackground";
 import { LoginCard } from "../components/LoginCard";
 import { LoginForm } from "../components/LoginForm";
@@ -20,10 +20,6 @@ const LoginPage: React.FC = () => {
     setPassword,
     handleSubmit,
   } = useLogin();
-
-  useEffect(() => {
-    void import("@/features/renew-adobe/pages/RenewAdobeAdminPage");
-  }, []);
 
   return (
     <div className="login-page retro-login">

@@ -3,8 +3,6 @@ const { loadBackendEnv } = require("./loadEnv");
 loadBackendEnv();
 
 const port = Number(process.env.PORT) || 3001;
-const SEPAY_PORT = Number(process.env.SEPAY_PORT) || 5000;
-const SEPAY_HOST = process.env.SEPAY_HOST || "0.0.0.0";
 
 const normalizeOrigin = (origin) => {
   if (typeof origin !== "string") {
@@ -121,27 +119,6 @@ if (cookieSecure === true && hasHttpOrigin) {
 
 const cookieSameSite = cookieSecure === true ? "none" : "lax";
 
-/** % thuế ước tính trên doanh thu tháng (ô "Thuế của tháng" dashboard). 0 = 0 ₫. */
-const rawDashboardTax = process.env.DASHBOARD_MONTHLY_TAX_RATE_PERCENT;
-const parsedDashboardTax =
-  rawDashboardTax === undefined || String(rawDashboardTax).trim() === ""
-    ? 0
-    : Number(rawDashboardTax);
-const dashboardMonthlyTaxRatePercent = Number.isFinite(parsedDashboardTax)
-  ? Math.min(100, Math.max(0, parsedDashboardTax))
-  : 0;
-
-/** 0–1: blend giá sinh viên (MAVS) giữa MAVC và MAVL khi variant_margin student NULL. */
-const rawDefaultPctStu = process.env.DEFAULT_PCT_STU;
-const parsedDefaultPctStu =
-  rawDefaultPctStu === undefined || String(rawDefaultPctStu).trim() === ""
-    ? 0.35
-    : Number(rawDefaultPctStu);
-const defaultPctStu =
-  Number.isFinite(parsedDefaultPctStu) && parsedDefaultPctStu >= 0 && parsedDefaultPctStu <= 1
-    ? parsedDefaultPctStu
-    : 0.35;
-
 const sessionSecret = process.env.SESSION_SECRET || "change_this_secret";
 if (isProd && (!process.env.SESSION_SECRET || sessionSecret === "change_this_secret")) {
   console.error(
@@ -155,12 +132,6 @@ module.exports = {
   allowedOrigins,
   allowedOriginSet,
   normalizeOrigin,
-  dashboardMonthlyTaxRatePercent,
-  defaultPctStu,
-  sepay: {
-    host: SEPAY_HOST,
-    port: SEPAY_PORT,
-  },
   session: {
     name: sessionName,
     secret: sessionSecret,

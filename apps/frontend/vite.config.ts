@@ -88,21 +88,6 @@ export default defineConfig(({ mode }) => {
           timeout: 900_000,
           proxyTimeout: 900_000,
         },
-        "/image": {
-          target: apiProxyTarget,
-          changeOrigin: true,
-          secure: false,
-        },
-        "/image_product": {
-          target: apiProxyTarget,
-          changeOrigin: true,
-          secure: false,
-        },
-        "/image_variant": {
-          target: apiProxyTarget,
-          changeOrigin: true,
-          secure: false,
-        },
       },
     },
     resolve: {

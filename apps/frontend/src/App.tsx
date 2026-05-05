@@ -4,14 +4,14 @@ import { LoginPage } from "@/features/auth";
 import { AuthProvider } from "./AuthContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
-import { MainLayout } from "./components/layout/MainLayout";
-import { AppRoutes } from "./routes/AppRoutes";
 import AppNotification from "./components/modals/AppNotification";
 import { isPublicRenewHost } from "@/lib/publicRenewHost";
 
 const RenewAdobePublicCheckPage = lazy(
   () => import("@/features/renew-adobe/storefront-check/RenewAdobePublicCheckPage"),
 );
+
+const AuthedLayout = lazy(() => import("./AuthedLayout"));
 
 const ShellSpinner = () => (
   <div className="flex min-h-screen items-center justify-center bg-slate-950">
@@ -44,9 +44,9 @@ function AppShell() {
         path="/*"
         element={
           <ProtectedRoute>
-            <MainLayout>
-              <AppRoutes />
-            </MainLayout>
+            <Suspense fallback={<ShellSpinner />}>
+              <AuthedLayout />
+            </Suspense>
           </ProtectedRoute>
         }
       />

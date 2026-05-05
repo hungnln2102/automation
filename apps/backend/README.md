@@ -27,7 +27,7 @@ src/
 │   ├── config.js        # pool, timezone, cron expression, getSqlCurrentDate
 │   ├── sqlHelpers.js    # COL, TABLES, normalizeDateSQL, expiryDateSQL
 │   ├── tasks/           # updateDatabaseTask, notifyZeroDays, notifyFourDays
-│   └── index.js         # Wire cron schedules, exports for SchedulerController
+│   └── index.js         # Wire cron schedules; taskInstances cho scheduler.js
 ├── schema/              # tables.js (re-export dbSchema)
 ├── services/            # idService, orderService, telegramOrderNotification, …
 ├── utils/               # orderHelpers, logger, normalizers, backupService, …

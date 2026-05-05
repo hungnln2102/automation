@@ -1,10 +1,5 @@
 {
-  "watch": ["src", "webhook", "index.js", "scheduler.js"],
+  "watch": ["src", "index.js", "scheduler.js"],
   "ext": "js,json",
-  "ignore": ["src/**/*.spec.js", "src/**/*.test.js", "node_modules"],
-  "exec": "node src/server.js",
-  "env": {
-    "NODE_ENV": "development"
-  },
-  "delay": "1000"
+  "ignore": ["src/**/*.test.js", "tests/**", "node_modules/**"]
 }
