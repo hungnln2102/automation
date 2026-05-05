@@ -62,8 +62,14 @@ docker compose --project-name automation-stack -f docker-compose.yml -f docker-c
 
 Việc cần làm:
 
-1. Máy build (hoặc CI): vào **`apps/frontend`**, **`pnpm build`** / **`npm run build`** với **`.env.production`**: hoặc `VITE_API_BASE_URL=` trống (cùng host + Nginx `/api/...`), hoặc `VITE_API_BASE_URL=https://api.otp90.com` nếu API subdomain riêng.
-2. Upload **`apps/frontend/dist`** lên chỗ Nginx **`root`** cho `admin.otp90.com`.
+1. Trong **`apps/frontend/.env.production`**, để `VITE_API_BASE_URL=` trống nếu Nginx proxy `/api/...` cùng host.
+2. Chạy deploy frontend để build và copy **`apps/frontend/dist`** vào Nginx root:
+
+```bash
+FRONTEND_WEB_ROOT=/var/www/automation-admin/dist ./deploy.sh --no-pull
+sudo nginx -t && sudo systemctl reload nginx
+```
+
 3. Trình duyệt **Ctrl+F5** / xóa cache / thử tab ẩn danh.
 
 Sau đó request tới **`https://admin.otp90.com/api/...`** hoặc **`https://api.otp90.com/api/...`** tuỳ cách build, không còn `localhost:3001`.

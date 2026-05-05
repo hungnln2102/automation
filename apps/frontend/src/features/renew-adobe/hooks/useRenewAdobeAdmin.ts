@@ -247,6 +247,7 @@ export function useRenewAdobeAdmin() {
                 }
               : null
           );
+          setUserOrdersRefreshKey((k) => k + 1);
           loadAccounts();
           break;
         case "auto_assign_start":
@@ -258,6 +259,7 @@ export function useRenewAdobeAdmin() {
             assigned: (event.assigned as number) ?? 0,
             skipped: (event.skipped as number) ?? 0,
           });
+          setUserOrdersRefreshKey((k) => k + 1);
           loadAccounts();
           break;
         case "auto_assign_error":
@@ -471,6 +473,7 @@ export function useRenewAdobeAdmin() {
     setDeletingAdminAccountId(account.id);
     deleteAdobeAdminAccount(account.id)
       .then(() => {
+        setUserOrdersRefreshKey((k) => k + 1);
         loadAccounts();
         setAdminAccountPendingDelete(null);
       })
@@ -497,6 +500,7 @@ export function useRenewAdobeAdmin() {
         })
         .then((data) => {
           if (data.success) {
+            setUserOrdersRefreshKey((k) => k + 1);
             loadAccounts();
           } else {
             throw new Error(data.error || "Check thất bại");

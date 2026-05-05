@@ -81,11 +81,25 @@ export function UserOrdersTable({
   const [orderData, setOrderData] = useState<OrderInfo[]>([]);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [listRefreshTick, setListRefreshTick] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     fetchRenewAdobeUserOrders()
-      .then((data) => setOrderData(data))
-      .catch(() => setOrderData([]));
+      .then((data) => {
+        if (!cancelled) setOrderData(data);
+      })
+      .catch(() => {
+        if (!cancelled) setOrderData([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [accountsRefreshDep, listRefreshTick]);
 
   const allRows = useMemo(() => flattenToUserRows(orderData), [orderData]);
@@ -110,6 +124,9 @@ export function UserOrdersTable({
   const totalItems = filtered.length;
   const start = (page - 1) * PAGE_SIZE;
   const currentRows = filtered.slice(start, start + PAGE_SIZE);
+  const emptyMessage = loading
+    ? "Đang tải danh sách user..."
+    : "Chưa có dữ liệu. Thêm user hoặc chạy Check để đồng bộ từ Adobe.";
 
   return (
     <div className="rounded-[18px] bg-gradient-to-br from-slate-800/65 via-slate-700/55 to-slate-900/65 border border-white/15 p-4 lg:p-6 shadow-[0_20px_55px_-30px_rgba(0,0,0,0.7)] backdrop-blur-sm">
@@ -170,7 +187,7 @@ export function UserOrdersTable({
           cardView={
             currentRows.length === 0 ? (
               <div className="p-8 text-center text-white/70">
-                Chưa có dữ liệu. Thêm user hoặc chạy Check để đồng bộ từ Adobe.
+                {emptyMessage}
               </div>
             ) : (
               <TableCard
@@ -227,7 +244,7 @@ export function UserOrdersTable({
               {currentRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-white/70">
-                    Chưa có dữ liệu. Thêm user hoặc chạy Check để đồng bộ từ Adobe.
+                    {emptyMessage}
                   </td>
                 </tr>
               ) : (

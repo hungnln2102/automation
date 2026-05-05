@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { useLocation } from "react-router-dom";
 import { apiFetch } from "./lib/api";
 import { isPublicRenewHost } from "./lib/publicRenewHost";
@@ -19,18 +25,73 @@ const AuthContext = createContext<AuthContextType>({
   refresh: async () => {},
 });
 
+const AUTH_USER_STORAGE_KEY = "automation.auth.user";
+
+function readCachedUser(): User | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_USER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<User>;
+    if (typeof parsed.id !== "number" || typeof parsed.username !== "string") {
+      return null;
+    }
+    return {
+      id: parsed.id,
+      username: parsed.username,
+      role: typeof parsed.role === "string" ? parsed.role : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUser(user: User | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (!user) {
+      window.sessionStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+/** Tránh chờ /me quá lâu (API cold / mạng) — coi như chưa đăng nhập và mở login nhanh. */
+const ME_FETCH_TIMEOUT_MS = 2800;
+
+/** Không cần chờ /me: storefront công khai hoặc trang login. */
+function skipsSessionProbe(pathname: string): boolean {
+  if (typeof window !== "undefined" && isPublicRenewHost()) return true;
+  return pathname === "/login";
+}
+
 export const useAuth = (): AuthContextType => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const location = useLocation();
+  const [user, setUserState] = useState<User | null>(() =>
+    skipsSessionProbe(location.pathname) ? null : readCachedUser()
+  );
+  const [loading, setLoading] = useState(() => {
+    if (skipsSessionProbe(location.pathname)) return false;
+    return readCachedUser() === null;
+  });
 
-  const refresh = async () => {
+  const setUser = useCallback((nextUser: User | null) => {
+    setUserState(nextUser);
+    writeCachedUser(nextUser);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const controller = new AbortController();
+    const tid = window.setTimeout(() => controller.abort(), ME_FETCH_TIMEOUT_MS);
     try {
-      const res = await apiFetch("/api/auth/me");
+      const res = await apiFetch("/api/auth/me", { signal: controller.signal });
       if (!res.ok) {
         setUser(null);
         return;
@@ -40,9 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       setUser(null);
     } finally {
+      window.clearTimeout(tid);
       setLoading(false);
     }
-  };
+  }, [setUser]);
 
   useEffect(() => {
     if (isPublicRenewHost()) {
@@ -55,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
     void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ lúc mount: bỏ /me cho /login & host storefront
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ probe session lúc mount; đổi route không gọi lại /me
   }, []);
 
   return (

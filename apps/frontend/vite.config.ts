@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
   const rootPath = resolve(frontendPath, "..");
   const sharedPath = resolve(rootPath, "shared");
 
-  if (mode === "development") {
+  if (mode === "development" || mode === "test") {
     build = {
       minify: false,
       sourcemap: true,
@@ -110,6 +110,8 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: "jsdom",
       setupFiles: "./src/setupTests.ts",
+      include: ["src/**/*.test.{ts,tsx}"],
+      exclude: ["e2e/**", "node_modules/**", "dist/**"],
     },
   };
 });

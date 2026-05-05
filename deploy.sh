@@ -12,9 +12,10 @@
 #
 # Usage:
 #   chmod +x deploy.sh
-#   ./deploy.sh                      # git pull (--ff-only), build, migrate, start API + scheduler
+#   ./deploy.sh                      # git pull, build frontend, build backend, migrate, start API + scheduler
 #   ./deploy.sh --no-pull            # không kéo code (deploy từ working tree hiện tại)
 #   ./deploy.sh --no-migrate
+#   ./deploy.sh --no-frontend        # không build/copy SPA frontend
 #   ./deploy.sh --down               # docker compose down
 #   ./deploy.sh logs [-f] [service …] # docker compose logs (ngắn gọn)
 #   ./deploy.sh ps                   # docker compose ps
@@ -94,11 +95,17 @@ fi
 
 RUN_MIGRATE=1
 GIT_PULL=1
+RUN_FRONTEND=1
+FRONTEND_WEB_ROOT="${FRONTEND_WEB_ROOT:-/var/www/automation-admin/dist}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-migrate)
       RUN_MIGRATE=0
+      shift
+      ;;
+    --no-frontend)
+      RUN_FRONTEND=0
       shift
       ;;
     --no-pull)
@@ -114,13 +121,15 @@ while [[ $# -gt 0 ]]; do
       cat <<'USAGE'
 deploy.sh — Docker stack Automation (PostgreSQL + Redis + API + scheduler)
 
-  ./deploy.sh                git pull, build, migrate knex, start api + scheduler
+  ./deploy.sh                git pull, build/copy frontend, build backend, migrate knex, start api + scheduler
   ./deploy.sh --no-pull      không git pull trước khi deploy
   ./deploy.sh --no-migrate   bỏ bước migrate
+  ./deploy.sh --no-frontend  bỏ bước build/copy frontend
   ./deploy.sh --down         docker compose down
   ./deploy.sh logs -f backend   xem log backend (cùng -p / -f compose deploy)
   ./deploy.sh logs --tail 100 postgres
   ./deploy.sh ps               trạng thái các service
+  FRONTEND_WEB_ROOT=/var/www/automation-admin/dist ./deploy.sh
 
 Viết tay (nếu có plugin): docker compose --project-name automation-stack \\
   -f docker-compose.yml -f docker-compose.deploy.yml logs -f backend
@@ -158,6 +167,49 @@ if [[ "${GIT_PULL}" -eq 1 ]]; then
 fi
 
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
+
+if [[ "${RUN_FRONTEND}" -eq 1 ]]; then
+  need_cmd npm
+
+  case "${FRONTEND_WEB_ROOT}" in
+    /*) ;;
+    *)
+      echo "[deploy] FRONTEND_WEB_ROOT phải là đường dẫn tuyệt đối: ${FRONTEND_WEB_ROOT}" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "[deploy] Frontend build..."
+  npm --prefix "${ROOT}/apps/frontend" run build
+
+  FRONTEND_DIST="${ROOT}/apps/frontend/dist"
+  if [[ ! -f "${FRONTEND_DIST}/index.html" ]]; then
+    echo "[deploy] Không thấy ${FRONTEND_DIST}/index.html sau khi build." >&2
+    exit 1
+  fi
+
+  if grep -R -E "localhost:3001|127\.0\.0\.1:3001" "${FRONTEND_DIST}" >/dev/null 2>&1; then
+    echo "[deploy] Frontend build còn chứa localhost:3001 — kiểm tra apps/frontend/.env.production." >&2
+    exit 1
+  fi
+
+  mkdir -p "${FRONTEND_WEB_ROOT}"
+  FRONTEND_WEB_ROOT_REAL="$(readlink -f "${FRONTEND_WEB_ROOT}")"
+  case "${FRONTEND_WEB_ROOT_REAL}" in
+    /|/var|/var/www)
+      echo "[deploy] FRONTEND_WEB_ROOT quá rộng/nguy hiểm: ${FRONTEND_WEB_ROOT_REAL}" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "[deploy] Frontend copy -> ${FRONTEND_WEB_ROOT_REAL}"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete "${FRONTEND_DIST}/" "${FRONTEND_WEB_ROOT_REAL}/"
+  else
+    find "${FRONTEND_WEB_ROOT_REAL}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+    cp -a "${FRONTEND_DIST}/." "${FRONTEND_WEB_ROOT_REAL}/"
+  fi
+fi
 
 echo "[deploy] Docker build..."
 stack_compose build --pull

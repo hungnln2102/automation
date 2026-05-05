@@ -35,4 +35,4 @@ Backend: `http://localhost:6000`
 
 Backend đọc `apps/backend/.env` rồi `.env.local` (dev) hoặc `.env.docker` (production / Docker).  
 Frontend: `apps/frontend/.env*` — xem `.env.example` và `.env.production.example`.  
-Deploy Docker: `apps/backend/.env.docker` (`npm run bootstrap`).
+Deploy Docker + frontend: `apps/backend/.env.docker` (`npm run bootstrap`), rồi `FRONTEND_WEB_ROOT=/var/www/automation-admin/dist ./deploy.sh`.

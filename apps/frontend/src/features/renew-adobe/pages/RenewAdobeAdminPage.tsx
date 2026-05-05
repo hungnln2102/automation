@@ -5,7 +5,6 @@ import { AddAdminAccountModal } from "@/features/renew-adobe/components/AddAdmin
 import { RenewAdobeHeader } from "@/features/renew-adobe/components/RenewAdobeHeader";
 import { RenewAdobeProgressPanel } from "@/features/renew-adobe/components/RenewAdobeProgressPanel";
 import { UserOrdersTable } from "@/features/renew-adobe/components/UserOrdersTable";
-import type { AdobeAdminAccount } from "@/features/renew-adobe/types";
 import { useRenewAdobeAdmin } from "@/features/renew-adobe/hooks/useRenewAdobeAdmin";
 
 const PAGE_SIZE = 10;
@@ -118,12 +117,7 @@ export default function RenewAdobeAdmin() {
 
       <div className="mt-6 space-y-6">
         <UserOrdersTable
-          accountsRefreshDep={`${accounts
-            .map(
-              (a) =>
-                `${a.id}:${a.tracking_user_count ?? 0}:${a.user_count}:${a.license_status}`
-            )
-            .join("|")}|k:${userOrdersRefreshKey}`}
+          accountsRefreshDep={`k:${userOrdersRefreshKey}`}
           onDeleteUser={handleDeleteUser}
           deletingId={deletingId}
           onFixUser={handleFixUser}
