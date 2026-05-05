@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
+  /** Dev: proxy target (npm run dev:frontend) — fallback khi fetch /api lỗi (mặc định :6000). */
+  readonly VITE_API_PROXY_TARGET?: string;
   /** Cùng giá trị `RENEW_ADOBE_PUBLIC_API_KEY` backend khi prod bật middleware kích hoạt public */
   readonly VITE_RENEW_ADOBE_PUBLIC_API_KEY?: string;
   /** Domain bổ sung (CSV) được coi như otp90 — form Renew chỉ không đăng nhập */

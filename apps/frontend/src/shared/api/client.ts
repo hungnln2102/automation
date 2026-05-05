@@ -24,15 +24,38 @@ const RAW_API_BASE: string = (() => {
   return "";
 })();
 
-function looksLikeLocalDevHost(raw: string): boolean {
-  return /localhost|127\.0\.0\.1/i.test((raw || "").trim());
+/** Hostname trình duyệt đang là máy dev (IPv4/IPv6 loopback). */
+function isBrowserLocalHostname(hostname: string): boolean {
+  const h = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1";
+}
+
+/**
+ * Base API có phải loopback / dev-only không (kể cả `::1`, `:3001`, `localhost:6000`).
+ * Tránh bundle prod còn sót URL máy dev hoặc IPv6 không khớp regex cũ.
+ */
+function isLoopbackDevApiBase(value: string): boolean {
+  const normalized = normalizeBaseUrl((value || "").trim());
+  if (!normalized) return false;
+  try {
+    const u = new URL(normalized);
+    const h = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return (
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h === "::1" ||
+      h === "0.0.0.0"
+    );
+  } catch {
+    return /localhost|127\.0\.0\.1/i.test(normalized);
+  }
 }
 
 /** Build-time: không cho bundle production “dính” máy dev nếu .env sai. */
 function sanitizeProductionRaw(raw: string): string {
   if (!isProdBundle) return raw;
   const t = raw.trim();
-  if (t && looksLikeLocalDevHost(t)) return "";
+  if (t && isLoopbackDevApiBase(t)) return "";
   return t;
 }
 
@@ -49,14 +72,12 @@ function normalizeBaseUrl(value: string): string {
 
 export const API_BASE_URL: string = normalizeBaseUrl(RAW_API_AFTER_SANITIZE);
 
-/** Base có hiệu lực trên browser: không bao giờ gọi localhost khi đang vào domain thật. */
+/** Base có hiệu lực trên browser: không bao giờ gọi loopback khi đang vào domain thật. */
 function effectiveApiBase(): string {
   const base = API_BASE_URL;
   if (typeof window === "undefined") return base;
   const hostname = window.location.hostname;
-  if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-    if (looksLikeLocalDevHost(base)) return "";
-  }
+  if (!isBrowserLocalHostname(hostname) && isLoopbackDevApiBase(base)) return "";
   return base;
 }
 
@@ -113,13 +134,20 @@ export async function apiFetch(
     return res;
   } catch (error) {
     const onLocalMachine =
-      typeof window === "undefined" ||
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-    // Chỉ retry backend cục bộ khi chạy Vite dev thật sự trên máy dev, không khi SPA dev lỗi trên domain public.
+      typeof window === "undefined" || isBrowserLocalHostname(window.location.hostname);
+    // Chỉ retry backend cục bộ khi chạy Vite dev trên máy dev — cùng origin proxy (mặc định :6000), không 3001.
     if (isDev && onLocalMachine && !input.startsWith("http")) {
+      const devApiOrigin = String(
+        (import.meta as any).env?.VITE_API_PROXY_TARGET || "",
+      )
+        .trim()
+        .replace(/\/+$/, "");
+      const fallbackOrigin = devApiOrigin || "http://127.0.0.1:6000";
       try {
-        const res = await fetch(`http://127.0.0.1:3001/${input.replace(/^\/+/, "")}`, finalInit);
+        const res = await fetch(
+          `${fallbackOrigin}/${input.replace(/^\/+/, "")}`,
+          finalInit,
+        );
         captureCsrfToken(res);
         handleUnauthorized(input, res);
         return res;
