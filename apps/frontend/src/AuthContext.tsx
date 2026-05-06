@@ -21,7 +21,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   setUser: () => {},
-  loading: true,
+  loading: false,
   refresh: async () => {},
 });
 
@@ -59,7 +59,7 @@ function writeCachedUser(user: User | null): void {
   }
 }
 
-/** Tránh chờ /me quá lâu (API cold / mạng) — coi như chưa đăng nhập và mở login nhanh. */
+/** Tránh chờ /me quá lâu (API cold / mạng) — mở login nhanh nếu session không phản hồi. */
 const ME_FETCH_TIMEOUT_MS = 2800;
 
 /** Không cần chờ /me: storefront công khai hoặc trang login. */
@@ -74,13 +74,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const location = useLocation();
-  const [user, setUserState] = useState<User | null>(() =>
+  const [initialCachedUser] = useState<User | null>(() =>
     skipsSessionProbe(location.pathname) ? null : readCachedUser()
   );
-  const [loading, setLoading] = useState(() => {
-    if (skipsSessionProbe(location.pathname)) return false;
-    return readCachedUser() === null;
-  });
+  const [user, setUserState] = useState<User | null>(initialCachedUser);
+  const [loading, setLoading] = useState(false);
 
   const setUser = useCallback((nextUser: User | null) => {
     setUserState(nextUser);
@@ -112,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setLoading(false);
       return;
     }
-    if (location.pathname === "/login") {
+    if (location.pathname === "/login" || !initialCachedUser) {
       setLoading(false);
       return;
     }

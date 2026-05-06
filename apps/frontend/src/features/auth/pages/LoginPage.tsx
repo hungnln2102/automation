@@ -1,4 +1,6 @@
 import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/AuthContext";
 import { LoginBackground } from "../components/LoginBackground";
 import { LoginCard } from "../components/LoginCard";
 import { LoginForm } from "../components/LoginForm";
@@ -11,6 +13,11 @@ import "../styles/login.css";
  * Refactored into smaller, maintainable components
  */
 const LoginPage: React.FC = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+  const state = location.state as { from?: string } | null;
+  const redirectTo =
+    state?.from && state.from !== "/login" ? state.from : "/renew-adobe-admin";
   const {
     email,
     password,
@@ -20,6 +27,10 @@ const LoginPage: React.FC = () => {
     setPassword,
     handleSubmit,
   } = useLogin();
+
+  if (user) {
+    return <Navigate to={redirectTo} replace />;
+  }
 
   return (
     <div className="login-page retro-login">
