@@ -1,5 +1,6 @@
 # Dedicated stack for the standalone Automation workspace.
-# PostgreSQL: trên host VPS chỉ mở tại 127.0.0.1:6432 (an toàn; GUI từ ngoài dùng SSH tunnel).
+# PostgreSQL: map cổng host 6432 → 5432 trong container. Bind 0.0.0.0 để backend trong Docker
+# có thể dùng DATABASE_URL với IP public VPS (hairpin). Nên chặn 6432 ở firewall chỉ IP tin cậy.
 # Redis host :6480.
 
 services:
@@ -11,7 +12,7 @@ services:
       POSTGRES_PASSWORD: automation_admin_dev
       POSTGRES_DB: automation_store
     ports:
-      - "127.0.0.1:6432:5432"
+      - "6432:5432"
     volumes:
       - automation_pg_data:/var/lib/postgresql/data
     healthcheck:

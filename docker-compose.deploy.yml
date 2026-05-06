@@ -36,6 +36,8 @@ services:
       - "${BACKEND_HOST_PORT:-6000}:6000"
     volumes:
       - automation_adobe_profiles:/app/.adobe-profiles
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   scheduler:
     build:
@@ -63,6 +65,8 @@ services:
       REDIS_ENABLED: ${REDIS_ENABLED:-true}
     volumes:
       - automation_adobe_profiles:/app/.adobe-profiles
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   automation_adobe_profiles:
