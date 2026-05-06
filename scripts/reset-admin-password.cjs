@@ -11,7 +11,7 @@ if (!password) {
 
 const connectionString =
   process.env.DATABASE_URL ||
-  "postgresql://automation_admin:automation_admin_dev@127.0.0.1:6432/automation_store";
+  "postgresql://admin_store_admin:admin_store_dev@127.0.0.1:5432/admin_store";
 
 async function main() {
   const passwordHash = await bcrypt.hash(password, 10);

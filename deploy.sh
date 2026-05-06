@@ -220,12 +220,12 @@ stack_compose up -d postgres redis
 
 echo "[deploy] Chờ PostgreSQL sẵn sàng..."
 for _ in $(seq 1 40); do
-  if stack_compose exec -T postgres pg_isready -U automation_admin -d automation_store >/dev/null 2>&1; then
+  if stack_compose exec -T postgres pg_isready -U admin_store_admin -d admin_store >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
-if ! stack_compose exec -T postgres pg_isready -U automation_admin -d automation_store >/dev/null 2>&1; then
+if ! stack_compose exec -T postgres pg_isready -U admin_store_admin -d admin_store >/dev/null 2>&1; then
   echo "[deploy] Postgres chưa sẵn sàng sau khi chờ — thử ./deploy.sh logs postgres" >&2
   exit 1
 fi

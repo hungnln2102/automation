@@ -1,22 +1,22 @@
 # Dedicated stack for the standalone Automation workspace.
-# PostgreSQL: map cổng host 6432 → 5432 trong container. Bind 0.0.0.0 để backend trong Docker
-# có thể dùng DATABASE_URL với IP public VPS (hairpin). Nên chặn 6432 ở firewall chỉ IP tin cậy.
+# PostgreSQL: map cổng host 5432 → 5432 trong container. Bind 0.0.0.0 để backend trong Docker
+# có thể dùng DATABASE_URL với IP public VPS (hairpin). Nên chặn 5432 ở firewall chỉ IP tin cậy.
 # Redis host :6480.
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: automation-stack-postgres
+    container_name: admin-store-postgres
     environment:
-      POSTGRES_USER: automation_admin
-      POSTGRES_PASSWORD: automation_admin_dev
-      POSTGRES_DB: automation_store
+      POSTGRES_USER: admin_store_admin
+      POSTGRES_PASSWORD: admin_store_dev
+      POSTGRES_DB: admin_store
     ports:
-      - "6432:5432"
+      - "5432:5432"
     volumes:
-      - automation_pg_data:/var/lib/postgresql/data
+      - admin_store_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U automation_admin -d automation_store"]
+      test: ["CMD-SHELL", "pg_isready -U admin_store_admin -d admin_store"]
       interval: 6s
       timeout: 5s
       retries: 12
@@ -37,7 +37,7 @@ services:
       retries: 8
 
 volumes:
-  automation_pg_data:
-    name: automation_stack_pg_data
+  admin_store_pg_data:
+    name: admin_store_pg_data
   automation_redis_data:
     name: automation_stack_redis_data

@@ -53,7 +53,7 @@ WHERE LOWER(username) = 'admin';
 
 ```bash
 docker compose --project-name automation-stack -f docker-compose.yml -f docker-compose.deploy.yml exec -T postgres \
-  psql -U automation_admin -d automation_store -c "\\dt *.*users*"
+  psql -U admin_store_admin -d admin_store -c "\\dt *.*users*"
 ```
 
 ## 2. Console vẫn gọi `localhost:3001` — không phải lỗi DB
@@ -86,4 +86,4 @@ git pull                          # hoặc ./deploy.sh (có git pull)
 
 ## 4. Postgres từ máy cá nhân
 
-Đọc **`env/CONNECT_DATABASE.md`** — Host Postgres sau tunnel **`127.0.0.1`**, cổng **`6432`** (Automation stack).
+Đọc **`env/CONNECT_DATABASE.md`** — Host Postgres sau tunnel **`127.0.0.1`**, cổng **`5432`** (Automation stack).
