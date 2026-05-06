@@ -13,14 +13,7 @@ const RAW_API_BASE: string = (() => {
       : "";
   if (metaBase) return metaBase;
 
-  const envBase =
-    typeof process !== "undefined"
-      ? ((process as any).env?.VITE_API_BASE_URL as string) || ""
-      : "";
-  if (envBase) return envBase;
-
   // Build production: để trống → `/api/...` cùng origin (Nginx path proxy).
-  // Hoặc set VITE_API_BASE_URL=https://api.otp90.com khi API ở subdomain riêng.
   return "";
 })();
 
