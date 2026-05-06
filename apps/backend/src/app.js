@@ -90,13 +90,19 @@ const sessionOpts = {
   },
 };
 
-if (isRedisAvailable()) {
+// Dùng `redisClient` khi đã khởi tạo — không dùng `isRedisAvailable()` ở đây vì cờ `ready`
+// của ioredis chỉ bật bất đồng bộ sau khi module load; nếu chờ `ready` sẽ luôn rơi vào
+// MemoryStore trong production (rò bộ nhớ + dễ OOM / exit 137).
+if (redisClient) {
   try {
     const RedisStore = require("connect-redis").default;
     sessionOpts.store = new RedisStore({ client: redisClient, prefix: "sess:" });
     logger.info("[Session] Using Redis store");
-  } catch {
-    logger.warn("[Session] connect-redis not installed — using in-memory store");
+  } catch (err) {
+    logger.warn(
+      "[Session] connect-redis not installed — using in-memory store: %s",
+      err && err.message ? err.message : err
+    );
   }
 } else {
   logger.info("[Session] Using in-memory store (no Redis)");
