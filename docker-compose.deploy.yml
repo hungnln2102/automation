@@ -1,9 +1,14 @@
 # Ghép với docker-compose.yml — chạy: ./deploy.sh
 # API + scheduler — secrets / CORS: apps/backend/.env.docker (npm run bootstrap).
-# DATABASE_URL / REDIS_URL trong container do `environment` bên dưới ghi đè.
 #
-# prerequisites: cp apps/backend/env.docker.example apps/backend/.env.docker và chỉnh SESSION_SECRET,
-# FRONTEND_ORIGINS, … (PostgreSQL trong Docker dùng service `postgres`.)
+# DATABASE_URL: chỉ lấy từ apps/backend/.env.docker (không ghi đè ở đây) để có thể trỏ Postgres
+# trong Docker (@postgres:5432) hoặc server ngoài (host/IP thật). Mẫu DB ngoài: env.docker.external-db.example
+# REDIS_URL: vẫn set trong environment bên dưới (redis nội bộ compose).
+#
+# prerequisites: cp apps/backend/env.docker.example (hoặc env.docker.external-db.example) → .env.docker
+#
+# depends_on postgres `required: false`: khi chỉ dùng Postgres ngoài, có thể `up -d redis backend scheduler`
+# mà không cần service postgres cục bộ (Compose v2.20+).
 
 services:
   backend:
@@ -16,6 +21,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
       redis:
         condition: service_healthy
     env_file:
@@ -24,7 +30,6 @@ services:
       NODE_ENV: production
       APP_ENV: docker
       PORT: "6000"
-      DATABASE_URL: postgresql://automation_admin:automation_admin_dev@postgres:5432/automation_store
       REDIS_URL: redis://redis:6379
       REDIS_ENABLED: ${REDIS_ENABLED:-true}
     ports:
@@ -43,6 +48,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
       redis:
         condition: service_healthy
       backend:
@@ -53,7 +59,6 @@ services:
       NODE_ENV: production
       APP_ENV: docker
       PORT: "6000"
-      DATABASE_URL: postgresql://automation_admin:automation_admin_dev@postgres:5432/automation_store
       REDIS_URL: redis://redis:6379
       REDIS_ENABLED: ${REDIS_ENABLED:-true}
     volumes:

@@ -9,6 +9,7 @@
 #
 # Docker: API luôn lắng nghe cổng 6000 trong container — Nginx/host map tới
 # ${BACKEND_HOST_PORT:-6000}. Giá trị PORT trong stack env bị compose ghi đè = 6000.
+# DATABASE_URL lấy từ apps/backend/.env.docker (Postgres trong Docker hoặc IP/host ngoài).
 #
 # Usage:
 #   chmod +x deploy.sh
