@@ -56,7 +56,7 @@ export function deleteAdobeAdminAccount(id: number): Promise<{ success: boolean;
 
 export function createAdobeAdminAccount(payload: {
   email: string;
-  password: string;
+  password?: string;
   otp_source?: "imap" | "tinyhost" | "hdsd";
 }) {
   return apiFetch(API_ENDPOINTS.RENEW_ADOBE_ACCOUNTS, {
@@ -64,7 +64,7 @@ export function createAdobeAdminAccount(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       email: payload.email.trim(),
-      password: payload.password,
+      ...(payload.password ? { password: payload.password } : {}),
       ...(payload.otp_source ? { otp_source: payload.otp_source } : {}),
     }),
   }).then(async (res) => {
@@ -77,6 +77,45 @@ export function createAdobeAdminAccount(payload: {
       throw new Error(data.error || res.statusText || "Không thêm được tài khoản.");
     }
     return data;
+  });
+}
+
+export function createAdobeAdminAccountsBulk(payload: {
+  emails: string[];
+  otp_source?: "imap" | "tinyhost" | "hdsd";
+}): Promise<{
+  success: boolean;
+  created: { id: number; email: string }[];
+  skipped: string[];
+  invalid: string[];
+  password_default?: string;
+}> {
+  return apiFetch(API_ENDPOINTS.RENEW_ADOBE_ACCOUNTS_BULK, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      emails: payload.emails.map((email) => email.trim()).filter(Boolean),
+      ...(payload.otp_source ? { otp_source: payload.otp_source } : {}),
+    }),
+  }).then(async (res) => {
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      success?: boolean;
+      created?: { id: number; email: string }[];
+      skipped?: string[];
+      invalid?: string[];
+      password_default?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error || res.statusText || "KhÃ´ng thÃªm Ä‘Æ°á»£c danh sÃ¡ch tÃ i khoáº£n.");
+    }
+    return {
+      success: data.success === true,
+      created: data.created ?? [],
+      skipped: data.skipped ?? [],
+      invalid: data.invalid ?? [],
+      password_default: data.password_default,
+    };
   });
 }
 

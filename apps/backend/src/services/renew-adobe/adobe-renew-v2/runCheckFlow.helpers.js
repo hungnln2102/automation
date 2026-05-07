@@ -90,6 +90,7 @@ async function buildSuccessResult({
   existingAdobeOrgId = null,
   cachedContractActiveLicenseCount = null,
   forceProductCheck = false,
+  stopAfterProductsWhenNoCcp = false,
   pinnedCcpProductIds = [],
   adminLoginEmail = null,
   cookieLogLabel = "Lưu cookies",
@@ -110,6 +111,7 @@ async function buildSuccessResult({
     existingAdobeOrgId,
     cachedContractActiveLicenseCount,
     forceProductCheck,
+    stopAfterProductsWhenNoCcp,
     pinnedCcpProductIds,
     adminLoginEmail,
   });

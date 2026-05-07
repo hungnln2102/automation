@@ -7,8 +7,6 @@ const logger = require("../../../utils/logger");
 const { LOGIN_PAGE_URL, AUTH_SERVICES_BASE } = require("./shared/constants");
 const { LOGIN_TIMEOUTS, runOtpIfPresent, runCredentialsFixedOnce, handleOtpChallenge } = require("./flows/login");
 
-const SKIP_RE = /^\s*(not now|skip|bỏ qua|later|skip for now)\s*$/i;
-
 /** True nếu URL là trang đã đăng nhập (account, adminconsole, home...), không phải form login. */
 function isOnAdobeSite(url) {
   const u = (url || "").toLowerCase();
@@ -53,13 +51,58 @@ async function runLoginStep(stepName, handler) {
   }
 }
 
+async function clickPromptButtonFromDom(page) {
+  return await page
+    .evaluate(() => {
+      const isVisible = (el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        const style = window.getComputedStyle(el);
+        return style.display !== "none" && style.visibility !== "hidden";
+      };
+      const normalize = (value) =>
+        String(value || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      const candidates = Array.from(
+        document.querySelectorAll("button, a, [role='button']")
+      ).filter(isVisible);
+      const target = candidates.find((el) => {
+        const label = normalize(
+          `${el.textContent || ""} ${el.getAttribute("aria-label") || ""}`
+        );
+        const dataId = normalize(el.getAttribute("data-id") || "");
+        return (
+          /\b(not now|skip|later|remind me later)\b/.test(label) ||
+          label.includes("bo qua") ||
+          /skip|not-now|later/.test(dataId)
+        );
+      });
+      if (!target) return false;
+      target.click();
+      return true;
+    })
+    .catch(() => false);
+}
+
 async function maybeSkipSecurityPrompt(page) {
   if (!/progressive-profile|user-security/i.test(page.url())) return;
-  await page
+  const clickedFromDom = await clickPromptButtonFromDom(page);
+  if (clickedFromDom) {
+    await page.waitForTimeout(LOGIN_TIMEOUTS.PROFILE_ACTION_WAIT_MS);
+    return;
+  }
+  const clicked = await page
     .getByRole("button", { name: /skip/i })
     .click({ timeout: LOGIN_TIMEOUTS.SECURITY_SKIP_CLICK_TIMEOUT_MS })
-    .catch(() => {});
-  await page.waitForTimeout(LOGIN_TIMEOUTS.PROFILE_ACTION_WAIT_MS);
+    .then(() => true)
+    .catch(() => false);
+  if (clicked) {
+    await page.waitForTimeout(LOGIN_TIMEOUTS.PROFILE_ACTION_WAIT_MS);
+  }
 }
 
 async function chooseNonPersonalProfileIfPresent(page, otpOptions = {}) {
@@ -116,10 +159,16 @@ async function chooseNonPersonalProfileIfPresent(page, otpOptions = {}) {
 }
 
 async function clickNotNowIfPresent(page) {
+  const clickedFromDom = await clickPromptButtonFromDom(page);
+  if (clickedFromDom) {
+    await page.waitForTimeout(LOGIN_TIMEOUTS.PROFILE_ACTION_WAIT_MS);
+    return true;
+  }
+  const promptTimeout = LOGIN_TIMEOUTS.PROFILE_PROMPT_CLICK_TIMEOUT_MS;
   const candidates = [
-    () => page.getByRole("button", { name: /not now|skip|later|bỏ qua/i }).first().click({ timeout: 2500 }),
-    () => page.locator('button:has-text("Not now"), button:has-text("Skip"), button:has-text("Later")').first().click({ timeout: 2500 }),
-    () => page.locator('[data-id*="skip"], [data-id*="not-now"], [data-id*="later"]').first().click({ timeout: 2500 }),
+    () => page.getByRole("button", { name: /not now|skip|later|bỏ qua/i }).first().click({ timeout: promptTimeout }),
+    () => page.locator('button:has-text("Not now"), button:has-text("Skip"), button:has-text("Later")').first().click({ timeout: promptTimeout }),
+    () => page.locator('[data-id*="skip"], [data-id*="not-now"], [data-id*="later"]').first().click({ timeout: promptTimeout }),
   ];
   for (const attempt of candidates) {
     try {
@@ -151,6 +200,49 @@ async function handleProgressiveProfile(page, otpOptions = {}) {
     }
     break;
   }
+}
+
+async function clickSignInFromDom(page) {
+  return await page
+    .evaluate(() => {
+      const isVisible = (el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        const style = window.getComputedStyle(el);
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          style.pointerEvents !== "none"
+        );
+      };
+      const normalize = (value) =>
+        String(value || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      const candidates = Array.from(
+        document.querySelectorAll("a, button, [role='button']")
+      ).filter(isVisible);
+
+      const byHref = candidates.find((el) =>
+        /adobelogin\.com|auth\.services\.adobe/i.test(
+          el.getAttribute("href") || ""
+        )
+      );
+      const byLabel = candidates.find((el) => {
+        const label = normalize(
+          `${el.textContent || ""} ${el.getAttribute("aria-label") || ""}`
+        );
+        return /\bsign\s*in\b/.test(label) || label.includes("dang nhap");
+      });
+      const target = byHref || byLabel;
+      if (!target) return false;
+      target.click();
+      return true;
+    })
+    .catch(() => false);
 }
 
 /**
@@ -288,31 +380,50 @@ async function runLoginFlow(page, opts) {
 
   // ─── B2: Sign in (nhiều biến thể UI Adobe / locale) ───
   logger.info("[adobe-v2] B2: Click Sign in");
+  const domSignInClicked = await clickSignInFromDom(page);
+  if (domSignInClicked) {
+    await page
+      .waitForURL(/auth\.services\.adobe\.com|adobelogin\.com|account\.adobe\.com|adminconsole\.adobe\.com/, {
+        timeout: Math.min(3000, LOGIN_TIMEOUTS.AUTH_REDIRECT_WAIT_MS),
+      })
+      .catch(() => {});
+  }
+  const domSignInResolved =
+    domSignInClicked &&
+    /auth\.services\.adobe\.com|adobelogin\.com|account\.adobe\.com|adminconsole\.adobe\.com/i.test(
+      page.url() || ""
+    );
+  const signInSelectorTimeout = Math.min(
+    LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS,
+    LOGIN_TIMEOUTS.SIGN_IN_SELECTOR_WAIT_MS
+  );
   const signInAttempts = [
-    () => page.locator("button.profile-comp.secondary-button").first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
-    () => page.getByRole("link", { name: /sign\s*in/i }).first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
-    () => page.getByRole("button", { name: /sign\s*in/i }).first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
-    () => page.getByRole("button", { name: /đăng nhập/i }).first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
-    () => page.getByRole("link", { name: /đăng nhập/i }).first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
-    () => page.locator('a[href*="adobelogin.com"], a[href*="ims-na1.adobelogin"]').first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
-    () => page.locator('a[href*="auth.services.adobe"]').first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
-    () => page.locator('button:has-text("Sign in")').first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
-    () => page.locator('a:has-text("Sign in")').first().click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
+    () => page.locator("button.profile-comp.secondary-button").first().click({ timeout: signInSelectorTimeout }),
+    () => page.getByRole("link", { name: /sign\s*in/i }).first().click({ timeout: signInSelectorTimeout }),
+    () => page.getByRole("button", { name: /sign\s*in/i }).first().click({ timeout: signInSelectorTimeout }),
+    () => page.getByRole("button", { name: /đăng nhập/i }).first().click({ timeout: signInSelectorTimeout }),
+    () => page.getByRole("link", { name: /đăng nhập/i }).first().click({ timeout: signInSelectorTimeout }),
+    () => page.locator('a[href*="adobelogin.com"], a[href*="ims-na1.adobelogin"]').first().click({ timeout: signInSelectorTimeout }),
+    () => page.locator('a[href*="auth.services.adobe"]').first().click({ timeout: signInSelectorTimeout }),
+    () => page.locator('button:has-text("Sign in")').first().click({ timeout: signInSelectorTimeout }),
+    () => page.locator('a:has-text("Sign in")').first().click({ timeout: signInSelectorTimeout }),
     () =>
       page
         .locator('[data-testid*="sign"][role="button"], [aria-label*="Sign in"], [aria-label*="sign in"]')
         .first()
-        .click({ timeout: LOGIN_TIMEOUTS.SIGN_IN_CLICK_TIMEOUT_MS }),
+        .click({ timeout: signInSelectorTimeout }),
   ];
 
-  let signInClicked = false;
-  for (const attempt of signInAttempts) {
-    try {
-      await attempt();
-      signInClicked = true;
-      break;
-    } catch {
-      /* thử selector tiếp */
+  let signInClicked = domSignInResolved;
+  if (!signInClicked) {
+    for (const attempt of signInAttempts) {
+      try {
+        await attempt();
+        signInClicked = true;
+        break;
+      } catch {
+        /* try next selector */
+      }
     }
   }
 

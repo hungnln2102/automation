@@ -1,6 +1,7 @@
 const {
   listAccounts,
   createAccount,
+  createAccountsBulk,
   deleteAccount,
   updateUrlAccess,
   updateAccount,
@@ -27,6 +28,7 @@ const checkAllAccounts = (req, res) =>
 module.exports = {
   listAccounts,
   createAccount,
+  createAccountsBulk,
   deleteAccount,
   runCheck,
   runCheckForAccountId,

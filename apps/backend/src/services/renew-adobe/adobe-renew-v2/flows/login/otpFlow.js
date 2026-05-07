@@ -62,7 +62,7 @@ async function handleOtpChallenge(page, otpOptions = {}, { stage = "unknown" } =
   await page
     .locator('[data-id="Page-PrimaryButton"], button:has-text("Continue")')
     .first()
-    .click({ timeout: 6000 })
+    .click({ timeout: LOGIN_TIMEOUTS.OTP_CONTINUE_CLICK_TIMEOUT_MS })
     .catch(() => {});
   await page.waitForTimeout(LOGIN_TIMEOUTS.OTP_POLL_INTERVAL_MS);
 
@@ -82,7 +82,9 @@ async function handleOtpChallenge(page, otpOptions = {}, { stage = "unknown" } =
   );
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    await page.waitForTimeout(LOGIN_TIMEOUTS.OTP_POLL_INTERVAL_MS);
+    if (attempt > 0) {
+      await page.waitForTimeout(LOGIN_TIMEOUTS.OTP_POLL_INTERVAL_MS);
+    }
     if ((page.url() || "").includes("@AdobeOrg")) return;
 
     const code = await fetchOtpBySource({
@@ -112,12 +114,19 @@ async function handleOtpChallenge(page, otpOptions = {}, { stage = "unknown" } =
 }
 
 async function runOtpIfPresent(page, otpOptions = {}, { stage = "after-email", isOnAdobeSite } = {}) {
+  const isAfterPassword = stage === "after-password";
+  const detectTimeoutMs = isAfterPassword
+    ? Math.min(
+        LOGIN_TIMEOUTS.SCREEN_DETECT_MS,
+        LOGIN_TIMEOUTS.AFTER_PASSWORD_OTP_DETECT_MS
+      )
+    : LOGIN_TIMEOUTS.SCREEN_DETECT_MS;
   let screen = await detectLoginScreen(
     page,
-    LOGIN_TIMEOUTS.SCREEN_DETECT_MS,
+    detectTimeoutMs,
     isOnAdobeSite
   );
-  if (screen !== "2fa") {
+  if (screen !== "2fa" && !isAfterPassword) {
     // Một số màn Adobe render challenge OTP trễ sau redirect/submit.
     await page.waitForTimeout(LOGIN_TIMEOUTS.SCREEN_RECHECK_WAIT_MS);
     screen = await detectLoginScreen(

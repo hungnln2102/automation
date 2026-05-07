@@ -83,6 +83,8 @@ export default function RenewAdobeAdmin() {
           total={checkAllProgress.total}
           completed={checkAllProgress.completed}
           failed={checkAllProgress.failed}
+          running={checkAllProgress.checkingIds.size}
+          concurrency={checkAllProgress.concurrency}
           isCheckingAll={isCheckingAll}
           autoAssignPhase={autoAssignPhase}
           autoAssignResult={autoAssignResult}

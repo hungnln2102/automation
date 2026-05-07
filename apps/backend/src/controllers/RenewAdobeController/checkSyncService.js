@@ -34,10 +34,14 @@ function buildCheckUpdatePayload({ scrapedData = {}, savedCookies = null } = {})
   }
 
   if (COLS.ID_PRODUCT) {
-    const raw = scrapedData.id_product;
-    const s = raw != null ? String(raw).trim() : "";
-    if (s !== "") {
-      payload[COLS.ID_PRODUCT] = s;
+    const hasIdProduct = Object.prototype.hasOwnProperty.call(
+      scrapedData,
+      "id_product"
+    );
+    if (hasIdProduct) {
+      const raw = scrapedData.id_product;
+      const s = raw != null ? String(raw).trim() : "";
+      payload[COLS.ID_PRODUCT] = s !== "" ? s : null;
     }
   }
 

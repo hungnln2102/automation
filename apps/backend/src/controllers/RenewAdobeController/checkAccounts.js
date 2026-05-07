@@ -11,6 +11,7 @@ const {
   upsertRenewAdobeOrderUserTrackingForAccount,
   reconcileOrderUserTrackingWithTeamMembers,
 } = require("../../services/renew-adobe/orderUserTrackingService");
+const { deleteAdminAccountById } = require("./accountDeletion");
 
 /** Bật xóa toàn team khi cột id_product không còn token chứa CCP (cron check mỗi giờ dùng chung luồng này). */
 function isRenewAdobeDeleteAllWhenNoCcpEnabled() {
@@ -56,6 +57,23 @@ function pickOverflowUserEmails(manageTeamMembers, contractActiveLicenseCount) {
     .map((item) => item.email);
 }
 
+function isFirstAccountCheck(account) {
+  if (!account) return true;
+  const lastChecked = COLS.LAST_CHECKED ? account[COLS.LAST_CHECKED] : null;
+  if (lastChecked) return false;
+
+  const orgName = COLS.ORG_NAME ? String(account[COLS.ORG_NAME] || "").trim() : "";
+  const adobeOrgId =
+    COLS.ADOBE_ORG_ID && account[COLS.ADOBE_ORG_ID]
+      ? String(account[COLS.ADOBE_ORG_ID]).trim()
+      : "";
+  const idProduct =
+    COLS.ID_PRODUCT && account[COLS.ID_PRODUCT]
+      ? String(account[COLS.ID_PRODUCT]).trim()
+      : "";
+  return !orgName && !adobeOrgId && !idProduct;
+}
+
 /**
  * Chỉ còn hệ thống auto Adobe: không dùng bảng mapping phụ nữa.
  * Tracking user được đọc/ghi qua system_automation.list_user khi có dữ liệu tương ứng.
@@ -75,6 +93,32 @@ async function syncMappingAndUpsertTracking(accountId, scrapedData, syncFromTeam
     });
   }
   return null;
+}
+
+function teamUserEmailsFromScrape(scrapedData) {
+  return [
+    ...new Set(
+      (scrapedData?.manageTeamMembers || [])
+        .map((user) => String(user?.email || "").trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ];
+}
+
+async function removeExpiredAdminAccountFromDb(id, email, extra = {}) {
+  const deletedAccount = await deleteAdminAccountById(id, {
+    reason: "expired_after_check",
+  });
+  if (!deletedAccount.deleted) {
+    throw new Error("Khong xoa duoc tai khoan admin khoi DB sau khi het han.");
+  }
+  return {
+    removedFromDb: true,
+    deletedAccountId: id,
+    email,
+    expired: true,
+    ...extra,
+  };
 }
 
 async function runCheckForAccountId(id) {
@@ -119,6 +163,7 @@ async function runCheckForAccountId(id) {
     Number(cachedContractActiveLicenseCountRaw) > 0
       ? Number(cachedContractActiveLicenseCountRaw)
       : null;
+  const firstAccountCheck = isFirstAccountCheck(account);
 
   const result = await adobeRenewV2.checkAccount(email, password, {
     savedCookiesFromDb: COLS.ALERT_CONFIG ? account[COLS.ALERT_CONFIG] : null,
@@ -129,6 +174,7 @@ async function runCheckForAccountId(id) {
     existingAdobeOrgId,
     cachedContractActiveLicenseCount,
     forceProductCheck: true,
+    stopAfterProductsWhenNoCcp: firstAccountCheck,
   });
 
   if (!result.success) {
@@ -142,7 +188,7 @@ async function runCheckForAccountId(id) {
   }
 
   let scrapedData = result.scrapedData;
-  let didMassDeleteAll = false;
+  let savedCookiesForDelete = result.savedCookies || null;
 
   await persistCheckResult(id, {
     scrapedData,
@@ -162,15 +208,26 @@ async function runCheckForAccountId(id) {
       .toLowerCase() === "paid";
 
   if (!hasActiveLicense) {
-    const userEmails = (scrapedData.manageTeamMembers || [])
-      .map((user) => user.email)
-      .filter(Boolean);
+    const noCcpConfirmedByProductsApi =
+      scrapedData.noCcpConfirmedByProductsApi === true;
+    let userEmails = teamUserEmailsFromScrape(scrapedData);
+
+    if (
+      noCcpConfirmedByProductsApi &&
+      scrapedData.stoppedBeforeUsers === true
+    ) {
+      logger.info(
+        "[renew-adobe] Account %s first-check expired theo products API -> dung truoc users/delete",
+        id
+      );
+    }
 
     if (userEmails.length > 0) {
+      if (!noCcpConfirmedByProductsApi) {
       // Safe-guard: re-check realtime (force product check) trước khi xóa hàng loạt.
       try {
         const confirmResult = await adobeRenewV2.checkAccount(email, password, {
-          savedCookiesFromDb: result.savedCookies || null,
+          savedCookiesFromDb: savedCookiesForDelete,
           mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
           otpSource,
           existingUrlAccess,
@@ -180,6 +237,9 @@ async function runCheckForAccountId(id) {
         });
         if (confirmResult.success && confirmResult.scrapedData) {
           scrapedData = confirmResult.scrapedData;
+          savedCookiesForDelete =
+            confirmResult.savedCookies || savedCookiesForDelete;
+          userEmails = teamUserEmailsFromScrape(scrapedData);
           contractActiveLicenseCount = Number(
             confirmResult.scrapedData.contractActiveLicenseCount || 0
           );
@@ -189,7 +249,7 @@ async function runCheckForAccountId(id) {
               .toLowerCase() === "paid";
           await persistCheckResult(id, {
             scrapedData: confirmResult.scrapedData,
-            savedCookies: confirmResult.savedCookies || result.savedCookies || null,
+            savedCookies: savedCookiesForDelete,
           });
         }
       } catch (confirmErr) {
@@ -197,6 +257,12 @@ async function runCheckForAccountId(id) {
           "[renew-adobe] Account %s: confirm license check failed before delete-all: %s",
           id,
           confirmErr.message
+        );
+      }
+      } else {
+        logger.info(
+          "[renew-adobe] Account %s: products API confirmed no CCP -> skip confirm check, delete users directly",
+          id
         );
       }
 
@@ -211,30 +277,49 @@ async function runCheckForAccountId(id) {
       }
 
       logger.info(
-        "[renew-adobe] Account %s expired → auto-delete %s users",
+        "[renew-adobe] Account %s expired -> force auto-delete %s users before removing DB row",
         id,
         userEmails.length
       );
-      try {
-        await adobeRenewV2.autoDeleteUsers(email, password, userEmails, {
-          savedCookiesFromDb: result.savedCookies || null,
+      const deleteResult = await adobeRenewV2.autoDeleteUsers(
+        email,
+        password,
+        userEmails,
+        {
+          savedCookiesFromDb: savedCookiesForDelete,
           mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
           otpSource,
-        });
-        await db(TABLE).where(COLS.ID, id).update({
-          [COLS.USER_COUNT]: 0,
-        });
-        didMassDeleteAll = true;
-
-        logger.info("[renew-adobe] Auto-delete xong cho account %s", id);
-      } catch (deleteError) {
-        logger.error(
-          "[renew-adobe] Auto-delete failed cho account %s: %s",
-          id,
-          deleteError.message
+        }
+      );
+      const failedDeletes = Array.isArray(deleteResult.failed)
+        ? deleteResult.failed
+        : [];
+      if (deleteResult.error || failedDeletes.length > 0) {
+        throw new Error(
+          `Auto-delete users failed before DB cleanup: ${
+            deleteResult.error || failedDeletes.join(", ")
+          }`
         );
       }
+      logger.info(
+        "[renew-adobe] Auto-delete xong cho expired account %s: deleted=%s",
+        id,
+        (deleteResult.deleted || []).length
+      );
+      return await removeExpiredAdminAccountFromDb(id, email, {
+        deletedUsers: deleteResult.deleted || [],
+        deletedUserCount: (deleteResult.deleted || []).length,
+      });
     }
+
+    logger.info(
+      "[renew-adobe] Account %s expired nhung khong co user snapshot -> remove DB row",
+      id
+    );
+    return await removeExpiredAdminAccountFromDb(id, email, {
+      deletedUsers: [],
+      deletedUserCount: 0,
+    });
   }
 
   if (hasActiveLicense && contractActiveLicenseCount > 0) {
@@ -293,7 +378,6 @@ async function runCheckForAccountId(id) {
   }
 
   if (
-    !didMassDeleteAll &&
     isRenewAdobeDeleteAllWhenNoCcpEnabled() &&
     scrapedData.manageTeamMembers &&
     Array.isArray(scrapedData.manageTeamMembers) &&
@@ -384,6 +468,16 @@ const runCheck = async (req, res) => {
   try {
     const trackingReconcile = await runCheckForAccountId(id);
     const account = await db(TABLE).where(COLS.ID, id).first();
+    if (trackingReconcile?.removedFromDb === true || !account) {
+      return res.json({
+        success: true,
+        message: "Check thanh cong. Account het han da duoc xoa khoi DB.",
+        _marker: marker,
+        removed_from_db: true,
+        deleted_account_id: id,
+        license_status: "expired",
+      });
+    }
 
     return res.json({
       success: true,

@@ -30,6 +30,66 @@ function mapRunCheckErrorCode(error) {
   return FLOW_ERROR_CODES.UNKNOWN;
 }
 
+function toBoundedInt(value, fallback, { min = 0, max = 30000 } = {}) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function resolveB1ReadyWaitMs() {
+  return toBoundedInt(
+    process.env.ADOBE_V2_B1_READY_WAIT_MS ??
+      process.env.ADOBE_V2_B1_STABILIZE_MS,
+    5000,
+    { min: 0, max: 30000 }
+  );
+}
+
+function entryOutcomeNeedsLogin(outcome) {
+  return outcome === "auth-url" || outcome === "login-form";
+}
+
+async function detectAdobeEntryOutcome(page) {
+  const url = page.url() || "";
+  if (/^chrome-error:\/\//i.test(url)) return "chrome-error";
+  if (/auth\.services\.adobe\.com|adobelogin\.com/i.test(url)) {
+    return "auth-url";
+  }
+
+  const loginFormVisible = await page
+    .locator('input[name="username"], input[type="email"], input[name="email"], input[type="password"], input#password')
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (loginFormVisible) return "login-form";
+
+  const orgSwitchVisible = await page
+    .locator('button[data-testid="org-switch-button"]')
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (orgSwitchVisible) return "org-switch";
+
+  return null;
+}
+
+async function waitForAdobeEntryOutcome(page, waitMs) {
+  if (waitMs <= 0) return "disabled";
+
+  const startedAt = Date.now();
+  let outcome = await detectAdobeEntryOutcome(page);
+  if (outcome) return outcome;
+
+  const deadline = startedAt + waitMs;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(Math.min(250, Math.max(50, deadline - Date.now())));
+    outcome = await detectAdobeEntryOutcome(page);
+    if (outcome) return outcome;
+  }
+
+  return "timeout";
+}
+
 /**
  * Chạy toàn bộ luồng B1–B13.
  * Nếu options.sharedSession = { context, page } thì dùng browser có sẵn (B14 có thể dùng tiếp), không đóng browser.
@@ -49,6 +109,7 @@ async function runCheckFlow(email, password, options = {}) {
     existingAdobeOrgId = null,
     cachedContractActiveLicenseCount = null,
     forceProductCheck = false,
+    stopAfterProductsWhenNoCcp = false,
     onlyLogin = false,
     pinnedCcpProductIds = [],
   } = options;
@@ -147,22 +208,24 @@ async function runCheckFlow(email, password, options = {}) {
     // ─── B1: Đi thẳng vào Admin Console entry ───
     // Adobe tự redirect adminconsole.adobe.com → auth.services.adobe.com khi chưa login.
     page = await gotoAdobeAdminConsoleB1(page, context, sharedSession || null);
-    // Sau khi goto, Adobe có thể redirect sang auth mất vài giây.
-    // ADOBE_V2_B1_STABILIZE_MS (mặc định 5000): tùy môi trường có thể hạ (vd. 2500) nếu ổn định.
-    const b1StabilizeMs = (() => {
-      const n = Number.parseInt(process.env.ADOBE_V2_B1_STABILIZE_MS || "", 10);
-      return Number.isFinite(n) && n >= 0 && n <= 30000 ? n : 5000;
-    })();
-    if (b1StabilizeMs > 0) {
-      await page.waitForTimeout(b1StabilizeMs);
-    }
+    // Wait only until we can classify the entry page; keep the old env as a fallback alias.
+    const b1ReadyWaitMs = resolveB1ReadyWaitMs();
+    const b1Outcome = await waitForAdobeEntryOutcome(page, b1ReadyWaitMs);
+    logger.info(
+      "[adobe-v2] B1 ready probe: outcome=%s waitBudgetMs=%d url=%s",
+      b1Outcome,
+      b1ReadyWaitMs,
+      (page.url() || "").slice(0, 90)
+    );
     await page.locator('button[aria-label="Close"], button[aria-label="close"], .dialog-close').first().click({ timeout: 3000 }).then(() => true).catch(() => false);
 
     if (!hasUsableCookies) {
       // Persistent profile không đi qua cookie JSON trong DB nhưng vẫn có session trong Chromium —
       // trước đây luôn runLoginFlow nên báo nhầm "chưa có cookie".
       const urlNoPayloadYet = page.url();
-      const sessionOkWithoutInject = await detectSessionValid(page, 5000);
+      const sessionOkWithoutInject = entryOutcomeNeedsLogin(b1Outcome)
+        ? false
+        : await detectSessionValid(page, 5000);
       logger.info(
         "[adobe-v2] B2 (không inject cookie DB): url=%s → session %s",
         urlNoPayloadYet.slice(0, 90),
@@ -178,6 +241,7 @@ async function runCheckFlow(email, password, options = {}) {
           existingAdobeOrgId,
           cachedContractActiveLicenseCount,
           forceProductCheck,
+          stopAfterProductsWhenNoCcp,
           pinnedCcpProductIds,
           adminLoginEmail: email,
           cookieLogLabel: "Lưu cookies",
@@ -204,6 +268,7 @@ async function runCheckFlow(email, password, options = {}) {
         existingAdobeOrgId,
         cachedContractActiveLicenseCount,
         forceProductCheck,
+        stopAfterProductsWhenNoCcp,
         pinnedCcpProductIds,
         adminLoginEmail: email,
         cookieLogLabel: "Lưu cookies sau login mới",
@@ -220,7 +285,9 @@ async function runCheckFlow(email, password, options = {}) {
     // Không dùng URL làm tiêu chí duy nhất.
     // Adobe có thể show shell adminconsole trước, rồi mới chuyển sang auth,
     // nên nếu check quá sớm sẽ bị false positive.
-    const sessionValid = await detectSessionValid(page, 5000);
+    const sessionValid = entryOutcomeNeedsLogin(b1Outcome)
+      ? false
+      : await detectSessionValid(page, 5000);
 
     logger.info(
       "[adobe-v2] B2: url=%s → session %s",
@@ -238,6 +305,7 @@ async function runCheckFlow(email, password, options = {}) {
         existingAdobeOrgId,
         cachedContractActiveLicenseCount,
         forceProductCheck,
+        stopAfterProductsWhenNoCcp,
         pinnedCcpProductIds,
         adminLoginEmail: email,
         cookieLogLabel: "Lưu cookies",
@@ -265,6 +333,7 @@ async function runCheckFlow(email, password, options = {}) {
       existingAdobeOrgId,
       cachedContractActiveLicenseCount,
       forceProductCheck,
+      stopAfterProductsWhenNoCcp,
       pinnedCcpProductIds,
       adminLoginEmail: email,
       cookieLogLabel: "Lưu cookies",

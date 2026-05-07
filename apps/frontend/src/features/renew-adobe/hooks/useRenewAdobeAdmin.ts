@@ -13,6 +13,7 @@ type CheckAllProgress = {
   total: number;
   completed: number;
   failed: number;
+  concurrency: number;
   checkingIds: Set<number>;
 };
 
@@ -91,6 +92,7 @@ export function useRenewAdobeAdmin() {
       total: 0,
       completed: 0,
       failed: 0,
+      concurrency: 4,
       checkingIds: new Set(),
     });
 
@@ -158,6 +160,7 @@ export function useRenewAdobeAdmin() {
             total: event.total as number,
             completed: 0,
             failed: 0,
+            concurrency: (event.concurrency as number) ?? 4,
             checkingIds: new Set(),
           });
           setAutoAssignPhase("idle");

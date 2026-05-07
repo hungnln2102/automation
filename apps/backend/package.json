@@ -24,6 +24,7 @@
     "migrate:rollback": "knex migrate:rollback",
     "migrate:status": "knex migrate:status",
     "migrate:make": "knex migrate:make",
+    "db:ensure": "node scripts/ops/ensure-local-database.js",
     "seed:run": "knex seed:run",
     "lint": "eslint \"src/**/*.js\"",
     "lint:fix": "eslint \"src/**/*.js\" --fix",

@@ -11,7 +11,10 @@ const {
   normalizeSeedOrgHex,
 } = require("./flows/check");
 const { fetchUsersViaApi } = require("./shared/usersListApi");
-const { fetchVerifiedCcpSeatProductIdsFromOrgProductsApi } = require("./shared/orgProductsApi");
+const {
+  fetchCcpSeatProductIdsFromOrgProductsApiDetails,
+  fetchCcpSeatProductIdsFromProductsPageApiDetails,
+} = require("./shared/orgProductsApi");
 
 const ADMIN_USERS = "https://adminconsole.adobe.com/users";
 
@@ -227,6 +230,8 @@ async function runB10ToB13(page, options = {}) {
   const pinnedCcpProductIds = Array.isArray(options.pinnedCcpProductIds)
     ? options.pinnedCcpProductIds
     : [];
+  const stopAfterProductsWhenNoCcp =
+    options.stopAfterProductsWhenNoCcp === true;
   const seedOrgHex = normalizeSeedOrgHex(options.existingAdobeOrgId);
   if (seedOrgHex) {
     logger.info("[adobe-v2] B10+: Có adobe_org_id từ DB — B12/B13 neo org %s…", seedOrgHex.slice(0, 12));
@@ -240,6 +245,7 @@ async function runB10ToB13(page, options = {}) {
   /** @type {string[]} */
   let ccpSeatProductIds = [];
   let ranProductPageCheck = false;
+  let productsApiResult = null;
   /** @type {unknown[]|null} */
   let jilUsersRawPages = null;
   const mergeJilRaw = (apiUsersResult) => {
@@ -248,10 +254,89 @@ async function runB10ToB13(page, options = {}) {
     jilUsersRawPages.push(...apiUsersResult.jilRawPages);
   };
 
+  const fetchCcpProductsApiOnce = async () => {
+    if (!ranProductPageCheck || !orgId || productsApiResult) return;
+    productsApiResult = await fetchCcpSeatProductIdsFromOrgProductsApiDetails(
+      page,
+      orgId
+    );
+    ccpSeatProductIds = productsApiResult.ids;
+  };
+
+  const shouldStopBeforeUsersForNoCcp = () =>
+    stopAfterProductsWhenNoCcp &&
+    productsApiResult?.ok === true &&
+    ccpSeatProductIds.length === 0;
+
+  if (stopAfterProductsWhenNoCcp && forceProductCheck) {
+    productsApiResult = await fetchCcpSeatProductIdsFromProductsPageApiDetails(
+      page,
+      seedOrgHex || ""
+    );
+    if (productsApiResult.ok === true) {
+      orgId = productsApiResult.orgId || orgId;
+      products = productsApiResult.products || [];
+      license_status = productsApiResult.licenseStatus || "unknown";
+      contractActiveLicenseCount = Number(
+        productsApiResult.contractActiveLicenseCount || 0
+      );
+      ccpSeatProductIds = productsApiResult.ids;
+
+      if (shouldStopBeforeUsersForNoCcp()) {
+        logger.info(
+          "[adobe-v2] B12: first-check products API fast xác nhận CCP product id = 0 → dừng trước B11/B13"
+        );
+        return {
+          org_name,
+          orgId,
+          license_status: "Expired",
+          products,
+          users,
+          contractActiveLicenseCount: 0,
+          ccpSeatProductIds,
+          noCcpConfirmedByProductsApi: true,
+          stoppedBeforeUsers: true,
+          productsApiProductCount: productsApiResult.orgProductCount,
+        };
+      }
+      productsApiResult = null;
+    } else {
+      productsApiResult = null;
+    }
+
+    const productResult = await runCheckProductFlow(page, { seedOrgId: seedOrgHex });
+    orgId = productResult.orgId || orgId;
+    products = productResult.products || [];
+    license_status = productResult.license_status || "unknown";
+    contractActiveLicenseCount = Number(productResult.contractActiveLicenseCount || 0);
+    ranProductPageCheck = true;
+    await fetchCcpProductsApiOnce();
+
+    if (shouldStopBeforeUsersForNoCcp()) {
+      logger.info(
+        "[adobe-v2] B12: first-check products API xác nhận CCP product id = 0 → dừng trước B11/B13"
+      );
+      return {
+        org_name,
+        orgId,
+        license_status: "Expired",
+        products,
+        users,
+        contractActiveLicenseCount: 0,
+        ccpSeatProductIds,
+        noCcpConfirmedByProductsApi: true,
+        stoppedBeforeUsers: true,
+        productsApiProductCount: productsApiResult.orgProductCount,
+      };
+    }
+  }
+
   const orgResult = await runCheckOrgNameFlow(page, { existingOrgName });
   org_name = orgResult.org_name;
 
-  if (!forceProductCheck && cachedContractActiveLicenseCount != null) {
+  if (ranProductPageCheck) {
+    // Product check đã chạy trước để tối ưu first-run; không chạy lại B12.
+  } else if (!forceProductCheck && cachedContractActiveLicenseCount != null) {
     contractActiveLicenseCount = cachedContractActiveLicenseCount;
     license_status = deriveLicenseStatusByContractCount(contractActiveLicenseCount);
     logger.info(
@@ -278,7 +363,7 @@ async function runB10ToB13(page, options = {}) {
 
   /** JIL products API (sau B12): lấy đúng productId CCP seat trước khi đọc users — đối chiếu id tuyệt đối. */
   if (ranProductPageCheck && orgId) {
-    ccpSeatProductIds = await fetchVerifiedCcpSeatProductIdsFromOrgProductsApi(page, orgId);
+    await fetchCcpProductsApiOnce();
   }
 
   const usersUrlPrimary = buildAdminUsersUrl(orgId);
@@ -318,7 +403,8 @@ async function runB10ToB13(page, options = {}) {
     products = productFallback.products || products;
     ranProductPageCheck = true;
     if (orgId) {
-      ccpSeatProductIds = await fetchVerifiedCcpSeatProductIdsFromOrgProductsApi(page, orgId);
+      productsApiResult = null;
+      await fetchCcpProductsApiOnce();
     }
     await page
       .goto(buildAdminUsersUrl(orgId), {
@@ -354,6 +440,10 @@ async function runB10ToB13(page, options = {}) {
     users,
     contractActiveLicenseCount,
     ccpSeatProductIds,
+    noCcpConfirmedByProductsApi:
+      productsApiResult?.ok === true && ccpSeatProductIds.length === 0,
+    stoppedBeforeUsers: false,
+    productsApiProductCount: productsApiResult?.orgProductCount ?? null,
     ...(jilUsersRawPages && jilUsersRawPages.length
       ? { jil_users_raw_pages: jilUsersRawPages }
       : {}),

@@ -1,9 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/ui/ModalPortal";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { createAdobeAdminAccount } from "../api/renewAdobeApi";
+import {
+  createAdobeAdminAccount,
+  createAdobeAdminAccountsBulk,
+} from "../api/renewAdobeApi";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DEFAULT_ADOBE_ADMIN_PASSWORD = "Adobe123@";
+
+type AddMode = "single" | "bulk";
 
 export type AddAdminAccountModalProps = {
   open: boolean;
@@ -11,21 +17,39 @@ export type AddAdminAccountModalProps = {
   onCreated: () => void;
 };
 
+function parseEmailList(value: string) {
+  return [
+    ...new Set(
+      value
+        .split(/[\s,;]+/)
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ];
+}
+
 export function AddAdminAccountModal({
   open,
   onClose,
   onCreated,
 }: AddAdminAccountModalProps) {
+  const [mode, setMode] = useState<AddMode>("single");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [bulkEmails, setBulkEmails] = useState("");
   const [otpSource, setOtpSource] = useState<"tinyhost" | "hdsd">("hdsd");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const bulkEmailCount = useMemo(
+    () => parseEmailList(bulkEmails).length,
+    [bulkEmails]
+  );
+
   useEffect(() => {
     if (!open) return;
+    setMode("single");
     setEmail("");
-    setPassword("");
+    setBulkEmails("");
     setOtpSource("hdsd");
     setError(null);
     setLoading(false);
@@ -35,28 +59,60 @@ export function AddAdminAccountModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const em = email.trim().toLowerCase();
-    if (!EMAIL_RE.test(em)) {
-      setError("Nhập email hợp lệ.");
-      return;
-    }
-    if (!password.trim()) {
-      setError("Nhập mật khẩu đăng nhập Adobe admin.");
+    setError(null);
+
+    if (mode === "single") {
+      const em = email.trim().toLowerCase();
+      if (!EMAIL_RE.test(em)) {
+        setError("Nhập email hợp lệ.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await createAdobeAdminAccount({
+          email: em,
+          otp_source: otpSource,
+        });
+        onCreated();
+        onClose();
+      } catch (err) {
+        setError((err as Error)?.message ?? "Không thêm được tài khoản.");
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
-    setError(null);
+    const emails = parseEmailList(bulkEmails);
+    const invalid = emails.filter((item) => !EMAIL_RE.test(item));
+    if (emails.length === 0) {
+      setError("Nhập ít nhất một email.");
+      return;
+    }
+    if (invalid.length > 0) {
+      setError(`Email không hợp lệ: ${invalid.slice(0, 5).join(", ")}`);
+      return;
+    }
+
     setLoading(true);
     try {
-      await createAdobeAdminAccount({
-        email: em,
-        password,
+      const result = await createAdobeAdminAccountsBulk({
+        emails,
         otp_source: otpSource,
       });
+      if (result.created.length === 0) {
+        setError(
+          result.skipped.length > 0
+            ? "Các email này đã có trong danh sách tài khoản admin."
+            : "Không thêm được tài khoản nào."
+        );
+        return;
+      }
       onCreated();
       onClose();
     } catch (err) {
-      setError((err as Error)?.message ?? "Không thêm được tài khoản.");
+      setError((err as Error)?.message ?? "Không thêm được danh sách tài khoản.");
     } finally {
       setLoading(false);
     }
@@ -67,6 +123,13 @@ export function AddAdminAccountModal({
 
   const inputClass =
     "w-full rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 outline-none";
+
+  const modeButtonClass = (value: AddMode) =>
+    `flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+      mode === value
+        ? "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/40"
+        : "text-white/60 hover:bg-white/5 hover:text-white"
+    }`;
 
   return (
     <ModalPortal>
@@ -100,36 +163,73 @@ export function AddAdminAccountModal({
               </p>
             </div>
 
-            <div className="space-y-1">
-              <label htmlFor="add-admin-email" className="text-xs font-medium text-white/60">
-                Email admin
-              </label>
-              <input
-                id="add-admin-email"
-                type="email"
-                autoComplete="username"
-                className={inputClass}
-                placeholder="admin@example.com"
-                value={email}
-                onChange={(ev) => setEmail(ev.target.value)}
+            <div className="flex rounded-xl border border-white/10 bg-slate-950/40 p-1">
+              <button
+                type="button"
+                className={modeButtonClass("single")}
+                onClick={() => setMode("single")}
                 disabled={loading}
-              />
+              >
+                Một email
+              </button>
+              <button
+                type="button"
+                className={modeButtonClass("bulk")}
+                onClick={() => setMode("bulk")}
+                disabled={loading}
+              >
+                Nhiều email
+              </button>
             </div>
 
+            {mode === "single" ? (
+              <div className="space-y-1">
+                <label
+                  htmlFor="add-admin-email"
+                  className="text-xs font-medium text-white/60"
+                >
+                  Email admin
+                </label>
+                <input
+                  id="add-admin-email"
+                  type="email"
+                  autoComplete="username"
+                  className={inputClass}
+                  placeholder="admin@example.com"
+                  value={email}
+                  onChange={(ev) => setEmail(ev.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <label
+                  htmlFor="add-admin-emails"
+                  className="text-xs font-medium text-white/60"
+                >
+                  Email admin
+                </label>
+                <textarea
+                  id="add-admin-emails"
+                  className={`${inputClass} min-h-36 resize-y leading-6`}
+                  placeholder={"admin1@example.com\nadmin2@example.com"}
+                  value={bulkEmails}
+                  onChange={(ev) => setBulkEmails(ev.target.value)}
+                  disabled={loading}
+                />
+                <p className="text-xs text-white/45">
+                  Đã nhận diện {bulkEmailCount} email.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-1">
-              <label htmlFor="add-admin-password" className="text-xs font-medium text-white/60">
+              <span className="text-xs font-medium text-white/60">
                 Mật khẩu
-              </label>
-              <input
-                id="add-admin-password"
-                type="password"
-                autoComplete="new-password"
-                className={inputClass}
-                placeholder="********"
-                value={password}
-                onChange={(ev) => setPassword(ev.target.value)}
-                disabled={loading}
-              />
+              </span>
+              <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-100">
+                {DEFAULT_ADOBE_ADMIN_PASSWORD}
+              </div>
             </div>
 
             <div className="space-y-1">

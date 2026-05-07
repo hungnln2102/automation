@@ -4,13 +4,12 @@ const { TABLE, COLS } = require("./accountTable");
 const { findAccountMatchByEmail, normalizeEmail } = require("./accountLookup");
 const { normalizeOtpSource } = require("../../services/otpProviderService");
 const {
-  removeProfileDirForEmail,
-} = require("../../services/renew-adobe/adobe-renew-v2/shared/profileSession");
-const {
   getOrderUserTrackingCountsForAdminAccounts,
 } = require("../../services/renew-adobe/orderUserTrackingService");
+const { deleteAdminAccountById } = require("./accountDeletion");
 
 const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DEFAULT_ADOBE_ADMIN_PASSWORD = "Adobe123@";
 
 const CHECK_EMPTY_COLS = [
   COLS.EMAIL,
@@ -24,10 +23,6 @@ const CHECK_EMPTY_COLS = [
   COLS.CREATED_AT,
 ];
 
-function trimStr(value) {
-  return value == null ? "" : String(value).trim();
-}
-
 function isValueEmpty(value) {
   if (value === null || value === undefined) return true;
   if (typeof value === "string") return value.trim() === "";
@@ -38,6 +33,28 @@ function isValueEmpty(value) {
 
 function getEmptyFields(row) {
   return CHECK_EMPTY_COLS.filter((col) => isValueEmpty(row[col]));
+}
+
+function normalizeAccountOtpSource(raw) {
+  const requestedOtpSource = normalizeOtpSource(raw, {
+    hasMailBackupId: false,
+  });
+  return requestedOtpSource === "imap" ? "hdsd" : requestedOtpSource;
+}
+
+function buildNewAccountRow(email, otpSource) {
+  return {
+    [COLS.EMAIL]: email,
+    [COLS.PASSWORD_ENC]: DEFAULT_ADOBE_ADMIN_PASSWORD,
+    [COLS.ORG_NAME]: null,
+    [COLS.LICENSE_STATUS]: null,
+    [COLS.USER_COUNT]: 0,
+    [COLS.LAST_CHECKED]: null,
+    [COLS.IS_ACTIVE]: true,
+    [COLS.CREATED_AT]: db.fn.now(),
+    ...(COLS.OTP_SOURCE ? { [COLS.OTP_SOURCE]: otpSource } : {}),
+    ...(COLS.URL_ACCESS ? { [COLS.URL_ACCESS]: null } : {}),
+  };
 }
 
 const listMailBackupMailboxes = async (_req, res) => {
@@ -119,13 +136,9 @@ const lookupAccountByEmail = async (req, res) => {
 
 const createAccount = async (req, res) => {
   const email = normalizeEmail(req.body?.email);
-  const password = (req.body?.password ?? "").toString();
 
   if (!email || !EMAIL_OK.test(email)) {
     return res.status(400).json({ error: "Email khong hop le." });
-  }
-  if (!password.trim()) {
-    return res.status(400).json({ error: "Thieu mat khau." });
   }
   if (req.body?.mail_backup_id != null && String(req.body.mail_backup_id).trim() !== "") {
     return res
@@ -141,24 +154,10 @@ const createAccount = async (req, res) => {
         .json({ error: "Email nay da co trong danh sach tai khoan admin." });
     }
 
-    const requestedOtpSource = normalizeOtpSource(req.body?.otp_source, {
-      hasMailBackupId: false,
-    });
-    const otpSource = requestedOtpSource === "imap" ? "hdsd" : requestedOtpSource;
+    const otpSource = normalizeAccountOtpSource(req.body?.otp_source);
 
     const [inserted] = await db(TABLE)
-      .insert({
-        [COLS.EMAIL]: email,
-        [COLS.PASSWORD_ENC]: password,
-        [COLS.ORG_NAME]: null,
-        [COLS.LICENSE_STATUS]: null,
-        [COLS.USER_COUNT]: 0,
-        [COLS.LAST_CHECKED]: null,
-        [COLS.IS_ACTIVE]: true,
-        [COLS.CREATED_AT]: db.fn.now(),
-        ...(COLS.OTP_SOURCE ? { [COLS.OTP_SOURCE]: otpSource } : {}),
-        ...(COLS.URL_ACCESS ? { [COLS.URL_ACCESS]: null } : {}),
-      })
+      .insert(buildNewAccountRow(email, otpSource))
       .returning(COLS.ID);
 
     const id =
@@ -180,6 +179,84 @@ const createAccount = async (req, res) => {
   }
 };
 
+const createAccountsBulk = async (req, res) => {
+  const rawEmails = Array.isArray(req.body?.emails)
+    ? req.body.emails
+    : String(req.body?.emails ?? req.body?.email ?? "")
+        .split(/[\s,;]+/);
+
+  const seen = new Set();
+  const invalid = [];
+  const emails = [];
+
+  for (const raw of rawEmails) {
+    const email = normalizeEmail(raw);
+    if (!email) continue;
+    if (!EMAIL_OK.test(email)) {
+      invalid.push(email);
+      continue;
+    }
+    if (seen.has(email)) continue;
+    seen.add(email);
+    emails.push(email);
+  }
+
+  if (emails.length === 0) {
+    return res.status(400).json({
+      error: invalid.length > 0 ? "Danh sach email khong hop le." : "Thieu danh sach email.",
+      created: [],
+      skipped: [],
+      invalid,
+    });
+  }
+
+  try {
+    const existingRows = await db(TABLE)
+      .select(COLS.EMAIL)
+      .whereIn(COLS.EMAIL, emails);
+    const existingEmails = new Set(
+      existingRows.map((row) => normalizeEmail(row[COLS.EMAIL]))
+    );
+    const newEmails = emails.filter((email) => !existingEmails.has(email));
+    const otpSource = normalizeAccountOtpSource(req.body?.otp_source);
+
+    let inserted = [];
+    if (newEmails.length > 0) {
+      inserted = await db(TABLE)
+        .insert(newEmails.map((email) => buildNewAccountRow(email, otpSource)))
+        .returning([COLS.ID, COLS.EMAIL]);
+    }
+
+    const created = inserted.map((row, index) => ({
+      id: typeof row === "object" ? row[COLS.ID] : row,
+      email:
+        typeof row === "object" && row[COLS.EMAIL]
+          ? row[COLS.EMAIL]
+          : newEmails[index],
+    }));
+    const skipped = emails.filter((email) => existingEmails.has(email));
+
+    logger.info("[renew-adobe] Bulk created admin accounts", {
+      created: created.length,
+      skipped: skipped.length,
+      invalid: invalid.length,
+    });
+
+    return res.status(created.length > 0 ? 201 : 200).json({
+      success: true,
+      created,
+      skipped,
+      invalid,
+      password_default: DEFAULT_ADOBE_ADMIN_PASSWORD,
+    });
+  } catch (error) {
+    logger.error("[renew-adobe] Bulk create accounts failed", {
+      error: error.message,
+    });
+    return res.status(500).json({ error: "Khong the them nhieu tai khoan admin." });
+  }
+};
+
 const deleteAccount = async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id) || id < 1) {
@@ -187,37 +264,11 @@ const deleteAccount = async (req, res) => {
   }
 
   try {
-    const row = await db(TABLE).where(COLS.ID, id).first();
-    if (!row) {
+    const result = await deleteAdminAccountById(id, { reason: "manual" });
+    if (!result.deleted) {
       return res.status(404).json({ error: "Khong tim thay tai khoan." });
     }
 
-    const deleted = await db(TABLE).where(COLS.ID, id).del();
-    if (!deleted) {
-      return res.status(404).json({ error: "Khong tim thay tai khoan." });
-    }
-
-    try {
-      const clean = removeProfileDirForEmail(row[COLS.EMAIL]);
-      if (clean.removed) {
-        logger.info("[renew-adobe] Deleted local profile dir", {
-          id,
-          email: trimStr(row[COLS.EMAIL]),
-          profileDir: clean.profileDir,
-        });
-      }
-    } catch (profileErr) {
-      logger.warn("[renew-adobe] deleteAccount profile cleanup failed", {
-        id,
-        email: trimStr(row[COLS.EMAIL]),
-        error: profileErr.message,
-      });
-    }
-
-    logger.info("[renew-adobe] Deleted admin account", {
-      id,
-      email: trimStr(row[COLS.EMAIL]),
-    });
     return res.json({ success: true, id });
   } catch (err) {
     logger.error("[renew-adobe] deleteAccount failed", { id, error: err.message });
@@ -302,6 +353,7 @@ module.exports = {
   listAccounts,
   lookupAccountByEmail,
   createAccount,
+  createAccountsBulk,
   deleteAccount,
   updateUrlAccess,
   updateAccount,

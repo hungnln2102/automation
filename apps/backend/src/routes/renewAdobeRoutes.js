@@ -2,6 +2,7 @@ const express = require("express");
 const {
   listAccounts,
   createAccount,
+  createAccountsBulk,
   deleteAccount,
   runCheck,
   runCheckWithCookies,
@@ -19,6 +20,7 @@ const router = express.Router();
 
 router.get("/accounts", listAccounts);
 router.post("/accounts", createAccount);
+router.post("/accounts/bulk", createAccountsBulk);
 router.delete("/accounts/:id", deleteAccount);
 router.get("/accounts/check-all", checkAllAccounts);
 router.get("/user-orders", listUserOrders);

@@ -2,6 +2,8 @@ export type RenewAdobeProgressPanelProps = {
   total: number;
   completed: number;
   failed: number;
+  running: number;
+  concurrency: number;
   isCheckingAll: boolean;
   autoAssignPhase: "idle" | "running" | "done";
   autoAssignResult: { assigned: number; skipped: number } | null;
@@ -12,17 +14,24 @@ export function RenewAdobeProgressPanel({
   total,
   completed,
   failed,
+  running,
+  concurrency,
   isCheckingAll,
   autoAssignPhase,
   autoAssignResult,
   onClose,
 }: RenewAdobeProgressPanelProps) {
+  const runningText =
+    isCheckingAll && concurrency > 1
+      ? ` ${Math.max(1, running)}/${concurrency} luồng`
+      : "";
+
   return (
     <div className="rounded-2xl bg-gradient-to-r from-slate-800/70 to-slate-900/70 border border-white/10 p-4 space-y-3">
       <div className="flex items-center justify-between text-sm">
         <span className="text-white/80 font-medium">
           {isCheckingAll
-            ? "Đang check..."
+            ? `Đang check${runningText}...`
             : autoAssignPhase === "running"
               ? "Đang phân bổ user..."
               : "Hoàn tất"}{" "}

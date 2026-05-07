@@ -77,6 +77,8 @@ async function checkAccount(email, password, options = {}) {
       ? Number(options.cachedContractActiveLicenseCount)
       : null;
   const forceProductCheck = options.forceProductCheck === true;
+  const stopAfterProductsWhenNoCcp =
+    options.stopAfterProductsWhenNoCcp === true;
   const pinnedFromDb = parseCcpProductIdsFromAlertConfig(options.savedCookiesFromDb);
 
   const headless = process.env.PLAYWRIGHT_HEADLESS !== "false";
@@ -90,7 +92,10 @@ async function checkAccount(email, password, options = {}) {
 
   let context = null;
   let page = null;
-  if (hasExistingProfileForEmail(email)) {
+  const skipPersistentProfile =
+    String(process.env.ADOBE_V2_SKIP_PERSISTENT_PROFILE || "").trim() === "1";
+  if (!skipPersistentProfile) {
+    const hadProfile = hasExistingProfileForEmail(email);
     try {
       const prof = await launchSessionFromProfile({
         adminEmail: email,
@@ -99,8 +104,14 @@ async function checkAccount(email, password, options = {}) {
       });
       context = prof.context;
       page = prof.page;
-      recordProfileUsage({ flow: "check", mode: "profile_hit" });
-      logger.info("[adobe-v2] facade.checkAccount: dùng persistent profile");
+      recordProfileUsage({
+        flow: "check",
+        mode: hadProfile ? "profile_hit" : "profile_created",
+      });
+      logger.info(
+        "[adobe-v2] facade.checkAccount: persistent profile %s",
+        hadProfile ? "hit" : "created"
+      );
     } catch (profileErr) {
       recordProfileUsage({ flow: "check", mode: "profile_launch_fail" });
       logger.warn(
@@ -109,8 +120,10 @@ async function checkAccount(email, password, options = {}) {
       );
     }
   } else {
-    recordProfileUsage({ flow: "check", mode: "profile_missing" });
-    logger.info("[adobe-v2] facade.checkAccount: chưa có profile local, dùng luồng thường");
+    recordProfileUsage({ flow: "check", mode: "profile_skipped" });
+    logger.info(
+      "[adobe-v2] facade.checkAccount: persistent profile skipped, using ephemeral context"
+    );
   }
 
   if (!context || !page) {
@@ -139,6 +152,7 @@ async function checkAccount(email, password, options = {}) {
       existingAdobeOrgId,
       cachedContractActiveLicenseCount,
       forceProductCheck,
+      stopAfterProductsWhenNoCcp,
       pinnedCcpProductIds: pinnedFromDb,
     });
 
@@ -148,6 +162,8 @@ async function checkAccount(email, password, options = {}) {
 
     const currentPage = sharedSession.page;
     const adminEmail = email.toLowerCase().trim();
+    const noCcpConfirmedByProductsApi =
+      result.noCcpConfirmedByProductsApi === true;
     const verifiedSeatIds = Array.isArray(result.ccpSeatProductIds)
       ? result.ccpSeatProductIds
       : [];
@@ -155,11 +171,14 @@ async function checkAccount(email, password, options = {}) {
       verifiedSeatIds.length > 0
         ? verifiedSeatIds
         : [...discoverAdobeProProductIdSet(result.users || [], adminEmail)];
-    const nextPinned = computeCcpProductIdsToPersist({
+    let nextPinned = computeCcpProductIdsToPersist({
       existingPinned: pinnedFromDb,
       discovered: discoveredIds,
       forceRefresh: forceProductCheck,
     });
+    if (noCcpConfirmedByProductsApi) {
+      nextPinned = [];
+    }
     const flaggedUsers = applyAdobeProFlags(result.users || [], adminEmail, nextPinned, {
       verifiedCcpSeatProductIds: verifiedSeatIds,
     });
@@ -175,6 +194,8 @@ async function checkAccount(email, password, options = {}) {
     const hasProducts = (result.products || []).length > 0;
     const hasActiveLicenseByCount =
       Number(result.contractActiveLicenseCount || 0) > 0;
+    const hasActiveAdobePlan =
+      !noCcpConfirmedByProductsApi && (hasProducts || hasActiveLicenseByCount);
     const adminProductCheck = checkUserAssignedProduct(
       users,
       adminEmail,
@@ -183,8 +204,7 @@ async function checkAccount(email, password, options = {}) {
       { verifiedCcpSeatProductIds: verifiedSeatIds }
     );
     const adminHasProduct =
-      (hasProducts || hasActiveLicenseByCount) &&
-      adminProductCheck.assigned === true;
+      hasActiveAdobePlan && adminProductCheck.assigned === true;
 
     if (adminHasProduct) {
       try {
@@ -197,7 +217,7 @@ async function checkAccount(email, password, options = {}) {
     }
 
     let urlAccess = existingUrlAccess || null;
-    if ((hasProducts || hasActiveLicenseByCount) && !urlAccess && result.orgId) {
+    if (hasActiveAdobePlan && !urlAccess && result.orgId) {
       try {
         const preferredCcpProductIds = [
           ...new Set(
@@ -260,6 +280,9 @@ async function checkAccount(email, password, options = {}) {
       urlAccess,
       id_product: idProductStr,
       snapshotProducts,
+      noCcpConfirmedByProductsApi,
+      stoppedBeforeUsers: result.stoppedBeforeUsers === true,
+      productsApiProductCount: result.productsApiProductCount ?? null,
     };
 
     const partialIncoming = {

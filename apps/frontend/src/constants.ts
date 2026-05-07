@@ -1,5 +1,6 @@
 export const API_ENDPOINTS = {
   RENEW_ADOBE_ACCOUNTS: "/api/renew-adobe/accounts",
+  RENEW_ADOBE_ACCOUNTS_BULK: "/api/renew-adobe/accounts/bulk",
   RENEW_ADOBE_ACCOUNT_DELETE: (id: number) => `/api/renew-adobe/accounts/${id}`,
   RENEW_ADOBE_ACCOUNT_CHECK: (id: number) =>
     `/api/renew-adobe/accounts/${id}/check`,

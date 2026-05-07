@@ -2,11 +2,18 @@ const { db } = require("../../db");
 const logger = require("../../utils/logger");
 const { TABLE, COLS } = require("./accountTable");
 
+function resolveCheckAllConcurrency(raw = process.env.RENEW_ADOBE_CHECK_ALL_CONCURRENCY) {
+  const parsed = Number.parseInt(String(raw || ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 4;
+  return Math.max(1, Math.min(parsed, 4));
+}
+
 const adobeQueueStatus = (_req, res) => {
+  const maxConcurrent = resolveCheckAllConcurrency();
   return res.json({
     running: 0,
     queued: 0,
-    maxConcurrent: 1,
+    maxConcurrent,
     maxQueueSize: 0,
   });
 };
@@ -16,6 +23,7 @@ async function runCheckAllAccountsFlow({
   onEvent = null,
   shouldAbort = () => false,
   logPrefix = "[renew-adobe][check-all]",
+  concurrency = resolveCheckAllConcurrency(),
 }) {
   const emit = (data) => {
     if (typeof onEvent === "function") {
@@ -29,22 +37,34 @@ async function runCheckAllAccountsFlow({
     .orderBy(COLS.ID, "asc");
 
   const total = rows.length;
-  emit({ type: "start", total });
+  const maxConcurrent =
+    total > 0 ? Math.min(resolveCheckAllConcurrency(concurrency), total) : 0;
+  emit({ type: "start", total, concurrency: maxConcurrent });
 
   let completed = 0;
   let failed = 0;
+  let nextIndex = 0;
 
-  for (const account of rows) {
-    if (shouldAbort()) break;
-
+  const runOne = async (account, workerIndex) => {
     const id = account[COLS.ID];
     const email = account[COLS.EMAIL];
-    emit({ type: "checking", id, email, completed, failed, total });
+    emit({
+      type: "checking",
+      id,
+      email,
+      completed,
+      failed,
+      total,
+      worker: workerIndex,
+      concurrency: maxConcurrent,
+    });
 
     try {
-      await runCheckForAccountId(id);
+      const checkResult = await runCheckForAccountId(id);
       completed += 1;
       const updated = await db(TABLE).where(COLS.ID, id).first();
+      const removedFromDb =
+        checkResult?.removedFromDb === true || !updated;
       emit({
         type: "done",
         id,
@@ -52,10 +72,14 @@ async function runCheckAllAccountsFlow({
         completed,
         failed,
         total,
-        removed_from_db: false,
+        worker: workerIndex,
+        concurrency: maxConcurrent,
+        removed_from_db: removedFromDb,
         org_name: updated?.[COLS.ORG_NAME] ?? null,
         user_count: updated?.[COLS.USER_COUNT] ?? 0,
-        license_status: updated?.[COLS.LICENSE_STATUS] ?? "unknown",
+        license_status: removedFromDb
+          ? "expired"
+          : updated?.[COLS.LICENSE_STATUS] ?? "unknown",
       });
     } catch (err) {
       completed += 1;
@@ -69,13 +93,31 @@ async function runCheckAllAccountsFlow({
         completed,
         failed,
         total,
+        worker: workerIndex,
+        concurrency: maxConcurrent,
         license_status: "unknown",
       });
     }
+  };
+
+  const runWorker = async (workerIndex) => {
+    while (!shouldAbort()) {
+      const account = rows[nextIndex];
+      nextIndex += 1;
+      if (!account) break;
+      await runOne(account, workerIndex);
+    }
+  };
+
+  if (maxConcurrent > 0) {
+    logger.info("%s Run check-all concurrency=%s total=%s", logPrefix, maxConcurrent, total);
+    await Promise.all(
+      Array.from({ length: maxConcurrent }, (_, index) => runWorker(index + 1))
+    );
   }
 
-  emit({ type: "complete", total, completed, failed });
-  return { total, completed, failed, autoAssign: null };
+  emit({ type: "complete", total, completed, failed, concurrency: maxConcurrent });
+  return { total, completed, failed, concurrency: maxConcurrent, autoAssign: null };
 }
 
 const checkAllAccounts = async ({ req, res, runCheckForAccountId }) => {
@@ -115,4 +157,5 @@ module.exports = {
   adobeQueueStatus,
   checkAllAccounts,
   runCheckAllAccountsFlow,
+  resolveCheckAllConcurrency,
 };

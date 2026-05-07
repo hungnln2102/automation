@@ -4,7 +4,10 @@ const {
   normalizeOrgToken,
   buildForwardHeadersFromCapturedRequest,
 } = require("./usersListApi");
-const { extractCcpSeatProductIdsFromOrgProductsList } = require("./accessChecks");
+const {
+  checkOrgLicenseCapacity,
+  extractCcpSeatProductIdsFromOrgProductsList,
+} = require("./accessChecks");
 
 /**
  * Query mặc định khi không parse được từ request đã bắt — khớp SPA www.adobe.com/manage-team (JIL products).
@@ -30,6 +33,18 @@ function extractProductsListQueryFromRequestUrl(reqUrl) {
   }
 }
 
+function extractOrgTokenFromProductsRequestUrl(reqUrl) {
+  try {
+    const parsed = new URL(String(reqUrl || ""));
+    const path = String(parsed.pathname || "");
+    const m = path.match(/\/jil-api\/v2\/organizations\/([^/]+)\/products\/?$/i);
+    if (!m) return null;
+    return normalizeOrgToken(decodeURIComponent(m[1]));
+  } catch {
+    return null;
+  }
+}
+
 function isAdobeEmbedHostPageUrl(url) {
   const u = String(url || "");
   return (
@@ -37,6 +52,50 @@ function isAdobeEmbedHostPageUrl(url) {
     /:\/\/account\.adobe\.com\//i.test(u) ||
     /:\/\/experience\.adobe\.com\//i.test(u)
   );
+}
+
+function buildProductsApiDetailsFromList(list, orgToken) {
+  const ids = extractCcpSeatProductIdsFromOrgProductsList(list);
+  const capacity = checkOrgLicenseCapacity(list);
+  const token = orgToken ? normalizeOrgToken(orgToken) : "";
+  const orgId = token ? token.replace(/@AdobeOrg$/i, "") : null;
+  return {
+    ok: true,
+    ids,
+    orgId,
+    orgToken: token || null,
+    products: Array.isArray(list) ? list : [],
+    orgProductCount: Array.isArray(list) ? list.length : 0,
+    contractActiveLicenseCount: Number(capacity.contractActiveLicenseCount || 0),
+    licenseStatus: capacity.licenseStatus || "unknown",
+    error: null,
+  };
+}
+
+async function captureProductsApiHeadersFromProductsPage(page, orgToken = "") {
+  const seedToken = orgToken ? normalizeOrgToken(orgToken) : "";
+  const seedHex = seedToken ? seedToken.split("@")[0] : "";
+  const productsHref = seedToken
+    ? `https://adminconsole.adobe.com/${seedToken}/products`
+    : "https://adminconsole.adobe.com/products";
+  const matchProducts = (req) => {
+    if (req.method() !== "GET") return false;
+    const token = extractOrgTokenFromProductsRequestUrl(req.url());
+    if (!token) return false;
+    if (!seedHex) return true;
+    return token.toLowerCase().includes(seedHex.toLowerCase());
+  };
+  const reqPromise = page.waitForRequest(matchProducts, { timeout: 8000 });
+  await page.goto(productsHref, {
+    waitUntil: "domcontentloaded",
+    timeout: 35000,
+  }).catch(() => {});
+  const req = await reqPromise;
+  const capturedToken = extractOrgTokenFromProductsRequestUrl(req.url()) || seedToken;
+  const forwardedHeaders = buildForwardHeadersFromCapturedRequest(req);
+  const productsListQuery =
+    extractProductsListQueryFromRequestUrl(req.url()) || PRODUCTS_LIST_QUERY_MANAGE_TEAM;
+  return { forwardedHeaders, productsListQuery, orgToken: capturedToken };
 }
 
 async function captureProductsApiHeaders(page, orgToken) {
@@ -126,13 +185,49 @@ async function fetchOrganizationProductsJson(
   return Array.isArray(list) ? list : [];
 }
 
+async function fetchCcpSeatProductIdsFromProductsPageApiDetails(page, orgId = "") {
+  try {
+    const { forwardedHeaders, productsListQuery, orgToken } =
+      await captureProductsApiHeadersFromProductsPage(page, orgId);
+    const list = await fetchOrganizationProductsJson(
+      page,
+      orgToken,
+      forwardedHeaders,
+      productsListQuery
+    );
+    const details = buildProductsApiDetailsFromList(list, orgToken);
+    logger.info(
+      "[adobe-v2] products-api-fast: org products=%d, ccp_seat_count=%d, ccp_seat_product_ids=[%s]",
+      details.orgProductCount,
+      details.ids.length,
+      details.ids.join(", ")
+    );
+    return details;
+  } catch (e) {
+    logger.warn("[adobe-v2] products-api-fast: không lấy được id CCP seat: %s", e.message);
+    return {
+      ok: false,
+      ids: [],
+      orgId: null,
+      orgToken: null,
+      products: [],
+      orgProductCount: 0,
+      contractActiveLicenseCount: 0,
+      licenseStatus: "unknown",
+      error: e.message,
+    };
+  }
+}
+
 /**
  * Sau B12 (trang products): gọi JIL products API, trích các productId CCP (Creative Cloud Pro).
  * Dùng để đối chiếu tuyệt đối với `products` trên từng user từ users API.
  */
-async function fetchVerifiedCcpSeatProductIdsFromOrgProductsApi(page, orgId) {
+async function fetchCcpSeatProductIdsFromOrgProductsApiDetails(page, orgId) {
   const orgNorm = String(orgId || "").trim();
-  if (!orgNorm) return [];
+  if (!orgNorm) {
+    return { ok: false, ids: [], orgProductCount: 0, error: "missing_org_id" };
+  }
   const token = normalizeOrgToken(orgNorm);
   try {
     const { forwardedHeaders, productsListQuery } = await captureProductsApiHeaders(page, token);
@@ -142,24 +237,33 @@ async function fetchVerifiedCcpSeatProductIdsFromOrgProductsApi(page, orgId) {
       forwardedHeaders,
       productsListQuery
     );
-    const ids = extractCcpSeatProductIdsFromOrgProductsList(list);
+    const details = buildProductsApiDetailsFromList(list, token);
     logger.info(
       "[adobe-v2] products-api: org products=%d, ccp_seat_count=%d, ccp_seat_product_ids=[%s]",
-      list.length,
-      ids.length,
-      ids.join(", ")
+      details.orgProductCount,
+      details.ids.length,
+      details.ids.join(", ")
     );
-    return ids;
+    return details;
   } catch (e) {
     logger.warn("[adobe-v2] products-api: không lấy được id CCP seat: %s", e.message);
-    return [];
+    return { ok: false, ids: [], orgProductCount: 0, error: e.message };
   }
+}
+
+async function fetchVerifiedCcpSeatProductIdsFromOrgProductsApi(page, orgId) {
+  const result = await fetchCcpSeatProductIdsFromOrgProductsApiDetails(page, orgId);
+  return result.ids;
 }
 
 module.exports = {
   fetchVerifiedCcpSeatProductIdsFromOrgProductsApi,
+  fetchCcpSeatProductIdsFromOrgProductsApiDetails,
+  fetchCcpSeatProductIdsFromProductsPageApiDetails,
   captureProductsApiHeaders,
+  captureProductsApiHeadersFromProductsPage,
   fetchOrganizationProductsJson,
+  extractOrgTokenFromProductsRequestUrl,
   extractProductsListQueryFromRequestUrl,
   PRODUCTS_LIST_QUERY_MANAGE_TEAM,
 };
