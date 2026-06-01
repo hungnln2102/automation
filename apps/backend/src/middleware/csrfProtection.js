@@ -21,6 +21,15 @@
 const csrf = require("csrf");
 const tokens = new csrf();
 
+function isPublicRenewAdobePath(req) {
+  const path = String(req.path || "");
+  const original = String(req.originalUrl || "");
+  return (
+    path.startsWith("/renew-adobe/public") ||
+    original.includes("/renew-adobe/public")
+  );
+}
+
 /**
  * Generate CSRF token for the session
  * Call this on GET requests to provide token to frontend
@@ -61,6 +70,7 @@ const generateToken = (req, res, next) => {
  * Skips verification for:
  * - GET, HEAD, OPTIONS methods
  * - /auth/* endpoints (have their own security)
+ * - /renew-adobe/public/* (storefront OTP/check — anonymous, no admin session)
  * - When DISABLE_CSRF is set to "true" (dev only)
  */
 const verifyToken = (req, res, next) => {
@@ -71,6 +81,10 @@ const verifyToken = (req, res, next) => {
 
   // Skip CSRF for auth endpoints (they have their own security)
   if (req.path.startsWith("/auth/")) {
+    return next();
+  }
+
+  if (isPublicRenewAdobePath(req)) {
     return next();
   }
 
@@ -127,6 +141,7 @@ module.exports = {
   generateToken,
   verifyToken,
   addTokenToResponse,
+  isPublicRenewAdobePath,
 };
 
 
