@@ -59,6 +59,7 @@ export type UserOrdersTableProps = {
   /** Đổi khi load lại danh sách admin → refetch user-orders (join API). */
   accountsRefreshDep?: string;
   onDeleteUser?: (accountId: number, userEmail: string) => void;
+  onDeleteListUser?: (listUserId: number) => void;
   deletingId?: string | null;
   onFixUser?: (userEmail: string) => void;
   fixingId?: string | null;
@@ -70,12 +71,89 @@ export type UserOrdersTableProps = {
 export function UserOrdersTable({
   accountsRefreshDep = "",
   onDeleteUser,
+  onDeleteListUser,
   deletingId,
   onFixUser,
   fixingId,
   onFixAllUsers,
   fixAllProgress,
 }: UserOrdersTableProps) {
+  const renderRowActions = (row: UserOrderRow) => {
+    const deleteKey =
+      row.listUserId != null ? `lu-${row.listUserId}` : `acc-${row.accountId}-${row.email}`;
+    const isDeleting = deletingId === deleteKey;
+    const canDeleteFromList =
+      row.listUserId != null &&
+      onDeleteListUser &&
+      (row.display_status === "not_added" || row.accountId === 0);
+
+    if (canDeleteFromList) {
+      return (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {row.display_status === "not_added" && onFixUser ? (
+            <button
+              type="button"
+              onClick={() => onFixUser(row.email)}
+              disabled={!!fixingId || !!deletingId || !!fixAllProgress}
+              className="rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 px-3 py-1.5 text-xs font-semibold hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {fixingId === row.email ? "Đang fix..." : "Fix"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => onDeleteListUser(row.listUserId!)}
+            disabled={!!deletingId || !!fixingId || !!fixAllProgress}
+            className="rounded-lg bg-rose-500/20 text-rose-300 border border-rose-400/40 px-3 py-1.5 text-xs font-semibold hover:bg-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isDeleting ? "Đang xóa..." : "Xóa"}
+          </button>
+        </div>
+      );
+    }
+
+    if (row.accountId > 0 && onDeleteUser) {
+      return (
+        <button
+          type="button"
+          onClick={() => onDeleteUser(row.accountId, row.email)}
+          disabled={!!deletingId || !!fixingId || !!fixAllProgress}
+          className="rounded-lg bg-rose-500/20 text-rose-300 border border-rose-400/40 px-3 py-1.5 text-xs font-semibold hover:bg-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isDeleting ? "Đang xóa..." : "Xóa"}
+        </button>
+      );
+    }
+
+    if (row.listUserId != null && onDeleteListUser) {
+      return (
+        <button
+          type="button"
+          onClick={() => onDeleteListUser(row.listUserId!)}
+          disabled={!!deletingId || !!fixingId || !!fixAllProgress}
+          className="rounded-lg bg-rose-500/20 text-rose-300 border border-rose-400/40 px-3 py-1.5 text-xs font-semibold hover:bg-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isDeleting ? "Đang xóa..." : "Xóa"}
+        </button>
+      );
+    }
+
+    if (row.accountId === 0 && onFixUser) {
+      return (
+        <button
+          type="button"
+          onClick={() => onFixUser(row.email)}
+          disabled={!!fixingId || !!deletingId || !!fixAllProgress}
+          className="rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 px-3 py-1.5 text-xs font-semibold hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {fixingId === row.email ? "Đang fix..." : "Fix"}
+        </button>
+      );
+    }
+
+    return null;
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [orderData, setOrderData] = useState<OrderInfo[]>([]);
@@ -201,26 +279,7 @@ export function UserOrdersTable({
                       <p className="text-xs text-white/60">Profile: {row.profile}</p>
                       <StatusBadge status={row.display_status} />
                       <p className="text-xs text-white/70">Hạn: {row.expiry}</p>
-                      {row.accountId > 0 && onDeleteUser && (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteUser(row.accountId, row.email)}
-                          disabled={!!deletingId || !!fixingId || !!fixAllProgress}
-                          className="mt-2 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-400/40 px-3 py-1.5 text-xs font-semibold"
-                        >
-                          Xóa
-                        </button>
-                      )}
-                      {row.accountId === 0 && onFixUser && (
-                        <button
-                          type="button"
-                          onClick={() => onFixUser(row.email)}
-                          disabled={!!fixingId || !!deletingId || !!fixAllProgress}
-                          className="mt-2 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 px-3 py-1.5 text-xs font-semibold"
-                        >
-                          {fixingId === row.email ? "Đang fix..." : "Fix"}
-                        </button>
-                      )}
+                      <div className="mt-2">{renderRowActions(row)}</div>
                     </div>
                   );
                 }}
@@ -265,28 +324,7 @@ export function UserOrdersTable({
                     <td className="px-2 sm:px-4 py-3 text-sm text-white/80">
                       {row.expiry}
                     </td>
-                    <td className="px-2 sm:px-4 py-3 text-center">
-                      {row.accountId > 0 && onDeleteUser && (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteUser(row.accountId, row.email)}
-                          disabled={!!deletingId || !!fixingId || !!fixAllProgress}
-                          className="rounded-lg bg-rose-500/20 text-rose-300 border border-rose-400/40 px-3 py-1.5 text-xs font-semibold hover:bg-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Xóa
-                        </button>
-                      )}
-                      {row.accountId === 0 && onFixUser && (
-                        <button
-                          type="button"
-                          onClick={() => onFixUser(row.email)}
-                          disabled={!!fixingId || !!deletingId || !!fixAllProgress}
-                          className="rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 px-3 py-1.5 text-xs font-semibold hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {fixingId === row.email ? "Đang fix..." : "Fix"}
-                        </button>
-                      )}
-                    </td>
+                    <td className="px-2 sm:px-4 py-3 text-center">{renderRowActions(row)}</td>
                   </tr>
                 ))
               )}

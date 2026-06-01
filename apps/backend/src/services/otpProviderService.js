@@ -1,11 +1,13 @@
 const logger = require("../utils/logger");
 const mailOtpService = require("./mailOtpService");
 const { readOtpFromTinyHost } = require("./tinyhost");
+const { fetchOtpFromDongvanApi } = require("./dongvan/dongvanOtpService");
 
 const OTP_SOURCES = {
   IMAP: "imap",
   TINYHOST: "tinyhost",
   HDSD: "hdsd",
+  DONGVAN: "dongvan",
 };
 
 function normalizeOtpSource(rawValue, { hasMailBackupId = false } = {}) {
@@ -16,7 +18,8 @@ function normalizeOtpSource(rawValue, { hasMailBackupId = false } = {}) {
   if (
     normalized === OTP_SOURCES.IMAP ||
     normalized === OTP_SOURCES.TINYHOST ||
-    normalized === OTP_SOURCES.HDSD
+    normalized === OTP_SOURCES.HDSD ||
+    normalized === OTP_SOURCES.DONGVAN
   ) {
     return normalized;
   }
@@ -163,10 +166,26 @@ async function fetchOtpBySource({
   accountEmail = "",
   senderFilter = "adobe",
   minTimestampMs = null,
+  oauthRefreshToken = null,
+  oauthClientId = null,
+  oauthMailEmail = null,
 }) {
   const normalizedSource = normalizeOtpSource(otpSource, {
     hasMailBackupId: Number.isFinite(Number(mailBackupId)),
   });
+
+  if (normalizedSource === OTP_SOURCES.DONGVAN) {
+    if (!accountEmail) return null;
+    return fetchOtpFromDongvanApi({
+      accountEmail,
+      refreshToken: oauthRefreshToken,
+      clientId: oauthClientId,
+      mailEmail: oauthMailEmail,
+      senderFilter,
+      minTimestampMs,
+      timeoutMs: 15000,
+    });
+  }
 
   if (normalizedSource === OTP_SOURCES.TINYHOST) {
     if (!accountEmail) return null;

@@ -5,9 +5,14 @@ import {
   createAdobeAdminAccount,
   createAdobeAdminAccountsBulk,
 } from "../api/renewAdobeApi";
+import { WEB_OTP_SOURCE_OPTIONS, type RenewOtpSource } from "../otpSource";
+import {
+  buildDongvanOtpPayload,
+  DongvanOtpFields,
+  validateDongvanOtpFields,
+} from "./DongvanOtpFields";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DEFAULT_ADOBE_ADMIN_PASSWORD = "Adobe123@";
 
 type AddMode = "single" | "bulk";
 
@@ -36,7 +41,11 @@ export function AddAdminAccountModal({
   const [mode, setMode] = useState<AddMode>("single");
   const [email, setEmail] = useState("");
   const [bulkEmails, setBulkEmails] = useState("");
-  const [otpSource, setOtpSource] = useState<"tinyhost" | "hdsd">("hdsd");
+  const [password, setPassword] = useState("");
+  const [otpSource, setOtpSource] = useState<RenewOtpSource>("hdsd");
+  const [otpRefreshToken, setOtpRefreshToken] = useState("");
+  const [otpClientId, setOtpClientId] = useState("");
+  const [otpMailEmail, setOtpMailEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +59,11 @@ export function AddAdminAccountModal({
     setMode("single");
     setEmail("");
     setBulkEmails("");
+    setPassword("");
     setOtpSource("hdsd");
+    setOtpRefreshToken("");
+    setOtpClientId("");
+    setOtpMailEmail("");
     setError(null);
     setLoading(false);
   }, [open]);
@@ -60,6 +73,25 @@ export function AddAdminAccountModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const pw = password.trim();
+    if (!pw) {
+      setError("Nhập mật khẩu Adobe.");
+      return;
+    }
+
+    const dongvanErr = validateDongvanOtpFields(otpSource, otpRefreshToken, otpClientId);
+    if (dongvanErr) {
+      setError(dongvanErr);
+      return;
+    }
+
+    const dongvanPayload = buildDongvanOtpPayload(
+      otpSource,
+      otpRefreshToken,
+      otpClientId,
+      otpMailEmail,
+    );
 
     if (mode === "single") {
       const em = email.trim().toLowerCase();
@@ -72,7 +104,9 @@ export function AddAdminAccountModal({
       try {
         await createAdobeAdminAccount({
           email: em,
+          password: pw,
           otp_source: otpSource,
+          ...dongvanPayload,
         });
         onCreated();
         onClose();
@@ -99,7 +133,9 @@ export function AddAdminAccountModal({
     try {
       const result = await createAdobeAdminAccountsBulk({
         emails,
+        password: pw,
         otp_source: otpSource,
+        ...dongvanPayload,
       });
       if (result.created.length === 0) {
         setError(
@@ -224,12 +260,23 @@ export function AddAdminAccountModal({
             )}
 
             <div className="space-y-1">
-              <span className="text-xs font-medium text-white/60">
+              <label
+                htmlFor="add-admin-password"
+                className="text-xs font-medium text-white/60"
+              >
                 Mật khẩu
-              </span>
-              <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-100">
-                {DEFAULT_ADOBE_ADMIN_PASSWORD}
-              </div>
+              </label>
+              <input
+                id="add-admin-password"
+                type="text"
+                autoComplete="new-password"
+                className={`${inputClass} font-mono`}
+                placeholder="Nhập mật khẩu Adobe"
+                value={password}
+                onChange={(ev) => setPassword(ev.target.value)}
+                disabled={loading}
+                required
+              />
             </div>
 
             <div className="space-y-1">
@@ -243,15 +290,28 @@ export function AddAdminAccountModal({
                 id="add-admin-otp-source"
                 className={selectClass}
                 value={otpSource}
-                onChange={(ev) =>
-                  setOtpSource(ev.target.value as "tinyhost" | "hdsd")
-                }
+                onChange={(ev) => setOtpSource(ev.target.value as RenewOtpSource)}
                 disabled={loading}
               >
-                <option value="hdsd">otp.hdsd.net API</option>
-                <option value="tinyhost">TinyHost API</option>
+                {WEB_OTP_SOURCE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
+
+            {otpSource === "dongvan" ? (
+              <DongvanOtpFields
+                refreshToken={otpRefreshToken}
+                clientId={otpClientId}
+                onRefreshTokenChange={setOtpRefreshToken}
+                onClientIdChange={setOtpClientId}
+                onMailEmailChange={(value) => setOtpMailEmail(value ?? "")}
+                disabled={loading}
+                inputClass={inputClass}
+              />
+            ) : null}
 
             {error && (
               <p className="text-sm text-amber-400/90" role="alert">

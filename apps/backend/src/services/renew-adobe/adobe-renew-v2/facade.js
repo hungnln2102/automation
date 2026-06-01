@@ -34,18 +34,39 @@ const { mergeRenewAdobeAlertConfig } = require("../../../controllers/RenewAdobeC
  */
 function normalizeSavedCookiesFromDb(raw) {
   if (raw == null) return null;
+  if (Array.isArray(raw) && raw.length > 0) {
+    return { cookies: raw };
+  }
   let obj = raw;
   if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw);
-      obj = parsed && typeof parsed === "object" ? parsed : null;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return { cookies: parsed };
+      }
+      obj =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? parsed
+          : null;
     } catch (_) {
       return null;
     }
   }
-  if (!obj || Array.isArray(obj) || typeof obj !== "object") return null;
-  if (!Array.isArray(obj.cookies) || obj.cookies.length === 0) return null;
-  return obj;
+  if (!obj || typeof obj !== "object") return null;
+
+  const fromCookies = Array.isArray(obj.cookies) ? obj.cookies : [];
+  const fromSaved = Array.isArray(obj.savedCookies) ? obj.savedCookies : [];
+  const fromSession = Array.isArray(obj.sessionCookies) ? obj.sessionCookies : [];
+  const cookies =
+    fromCookies.length > 0
+      ? fromCookies
+      : fromSaved.length > 0
+        ? fromSaved
+        : fromSession.length > 0
+          ? fromSession
+          : [];
+  if (cookies.length === 0) return null;
+  return { ...obj, cookies };
 }
 
 /**

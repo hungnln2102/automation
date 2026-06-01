@@ -112,4 +112,29 @@ export const RENEW_ADOBE_PUBLIC_CHECK_STYLES = `
       animation: none !important;
     }
   }
+
+  @keyframes cp-float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes cp-float-d {
+    0%, 100% { transform: translateY(0px) rotate(45deg); }
+    50% { transform: translateY(-8px) rotate(45deg); }
+  }
+  .animate-cp-float { animation: cp-float 3s ease-in-out infinite; }
+  .animate-cp-float-d { animation: cp-float-d 3s ease-in-out infinite 0.5s; }
+
+  @keyframes cp-slide-in-left {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes cp-slide-in-right {
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @media (max-width: 1023px) {
+    .cp-panel-left-active { animation: cp-slide-in-left 0.4s ease-out forwards; }
+    .cp-panel-right-active { animation: cp-slide-in-right 0.4s ease-out forwards; }
+    .cp-panel-hidden { display: none !important; }
+  }
 `;

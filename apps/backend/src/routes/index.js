@@ -1,6 +1,7 @@
 const express = require("express");
 const authRoutes = require("./authRoutes");
 const renewAdobeRoutes = require("./renewAdobeRoutes");
+const renewAdobePublicRoutes = require("./renewAdobePublicRoutes");
 const { getRenewAdobeProxy } = require("./renewAdobeProxy");
 const { authGuard } = require("../middleware/authGuard");
 const { notifyError } = require("../utils/telegramErrorNotifier");
@@ -41,6 +42,8 @@ router.post("/error-report", (req, res) => {
 
   return res.json({ ok: true });
 });
+
+router.use("/renew-adobe/public", renewAdobePublicRoutes);
 
 router.use(authGuard);
 router.use("/renew-adobe", longTimeout(900_000), renewAdobeMount);

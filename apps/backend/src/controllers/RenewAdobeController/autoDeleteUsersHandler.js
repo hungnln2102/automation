@@ -73,7 +73,7 @@ const runAutoDeleteUsers = async (req, res) => {
     }
 
     const email = account[COLS.EMAIL];
-    const password = account[COLS.PASSWORD_ENC] || "";
+    const password = String(account[COLS.PASSWORD_ENC] || "").trim();
     const mailBackupId = null;
     const otpSource =
       COLS.OTP_SOURCE && account[COLS.OTP_SOURCE]

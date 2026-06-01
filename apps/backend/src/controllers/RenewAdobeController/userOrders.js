@@ -1,5 +1,6 @@
 const { db } = require("../../db");
 const logger = require("../../utils/logger");
+const { normalizeOtpSource } = require("../../services/otpProviderService");
 const {
   assignUserToAvailableAccount,
 } = require("../../services/renew-adobe/fixUserAssignmentService");
@@ -16,6 +17,7 @@ const TRACK_TABLE = tableName(
 const TRACK_COLS = RENEW_ADOBE_SCHEMA.ORDER_USER_TRACKING.COLS;
 const ACC_TABLE = tableName(RENEW_ADOBE_SCHEMA.ACCOUNT.TABLE, SCHEMA_RENEW_ADOBE);
 const ACC_COLS = RENEW_ADOBE_SCHEMA.ACCOUNT.COLS;
+const { resolveDongvanOAuthFromBody } = require("../../services/dongvan/parseDongvanLine");
 
 const listUserOrders = async (_req, res) => {
   try {
@@ -25,7 +27,13 @@ const listUserOrders = async (_req, res) => {
           db.raw(`LOWER(TRIM(COALESCE(??, '')))`, [`acc.${ACC_COLS.ORG_NAME}`]),
           "=",
           db.raw(`LOWER(TRIM(COALESCE(??, '')))`, [`t.${TRACK_COLS.ORG_NAME}`])
-        );
+        )
+          .andOn(
+            db.raw(`TRIM(COALESCE(??, '')) <> ''`, [`acc.${ACC_COLS.ORG_NAME}`])
+          )
+          .andOn(
+            db.raw(`TRIM(COALESCE(??, '')) <> ''`, [`t.${TRACK_COLS.ORG_NAME}`])
+          );
       })
       .select(
         `t.${TRACK_COLS.ID} as list_user_id`,
@@ -37,6 +45,7 @@ const listUserOrders = async (_req, res) => {
         ),
         `t.${TRACK_COLS.STATUS} as status`,
         `t.${TRACK_COLS.ID_PRODUCT} as id_product`,
+        `t.${TRACK_COLS.OTP_SOURCE} as otp_source`,
         `t.${TRACK_COLS.ORG_NAME} as tracking_org_name`,
         `t.${TRACK_COLS.STATUS} as tracking_status`,
         `acc.${ACC_COLS.ID} as adobe_account_id`,
@@ -75,6 +84,23 @@ function resolveListUserStatus(raw) {
       : String(raw).trim();
   if (s === "chua add") return "chưa add";
   if (LIST_USER_ALLOWED_STATUS.has(s)) return s;
+  return null;
+}
+
+function normalizeListUserOtpSource(raw) {
+  const requestedOtpSource = normalizeOtpSource(raw, { hasMailBackupId: false });
+  return requestedOtpSource === "imap" ? "hdsd" : requestedOtpSource;
+}
+
+function resolveOtpOAuthFields(body) {
+  return resolveDongvanOAuthFromBody(body);
+}
+
+function validateDongvanCredentials(otpSource, oauth) {
+  if (otpSource !== "dongvan") return null;
+  if (!oauth.refreshToken || !oauth.clientId) {
+    return "DongVan OTP cần dán dòng mail đầy đủ (email|...|token|client_id).";
+  }
   return null;
 }
 
@@ -128,6 +154,13 @@ const createListUser = async (req, res) => {
         ? String(idProductBody).trim()
         : null;
 
+    const otp_source = normalizeListUserOtpSource(body.otp_source ?? "hdsd");
+    const oauth = resolveOtpOAuthFields(body);
+    const dongvanErr = validateDongvanCredentials(otp_source, oauth);
+    if (dongvanErr) {
+      return res.status(400).json({ error: dongvanErr });
+    }
+
     const insertRow = {
       [TRACK_COLS.CUSTOMER]: customer,
       [TRACK_COLS.ACCOUNT]: account,
@@ -135,11 +168,40 @@ const createListUser = async (req, res) => {
       [TRACK_COLS.EXPIRED]: expired,
       [TRACK_COLS.STATUS]: status,
       [TRACK_COLS.ID_PRODUCT]: id_product,
+      ...(TRACK_COLS.OTP_SOURCE ? { [TRACK_COLS.OTP_SOURCE]: otp_source } : {}),
+      ...(TRACK_COLS.OTP_REFRESH_TOKEN
+        ? { [TRACK_COLS.OTP_REFRESH_TOKEN]: oauth.refreshToken }
+        : {}),
+      ...(TRACK_COLS.OTP_CLIENT_ID ? { [TRACK_COLS.OTP_CLIENT_ID]: oauth.clientId } : {}),
+      ...(TRACK_COLS.OTP_MAIL_EMAIL ? { [TRACK_COLS.OTP_MAIL_EMAIL]: oauth.mailEmail } : {}),
     };
 
-    const [inserted] = await db(TRACK_TABLE).insert(insertRow).returning("*");
+    const existing = await db(TRACK_TABLE)
+      .whereRaw("LOWER(TRIM(COALESCE(??, ''))) = ?", [TRACK_COLS.ACCOUNT, account])
+      .orderBy(TRACK_COLS.ID, "asc")
+      .first();
 
-    logger.info("[renew-adobe] list_user: inserted id=%s account=%s", inserted?.id, account);
+    let inserted = null;
+    let updatedExisting = false;
+
+    if (existing?.[TRACK_COLS.ID]) {
+      [inserted] = await db(TRACK_TABLE)
+        .where(TRACK_COLS.ID, existing[TRACK_COLS.ID])
+        .update({
+          ...insertRow,
+          ...(TRACK_COLS.UPDATED_AT ? { [TRACK_COLS.UPDATED_AT]: db.fn.now() } : {}),
+        })
+        .returning("*");
+      updatedExisting = true;
+      logger.info(
+        "[renew-adobe] list_user: updated id=%s account=%s (trùng email)",
+        inserted?.id,
+        account
+      );
+    } else {
+      [inserted] = await db(TRACK_TABLE).insert(insertRow).returning("*");
+      logger.info("[renew-adobe] list_user: inserted id=%s account=%s", inserted?.id, account);
+    }
 
     const assignAdobeNow =
       body.assignAdobeNow === true ||
@@ -177,9 +239,13 @@ const createListUser = async (req, res) => {
       }
     }
 
-    return res.status(201).json({
+    return res.status(updatedExisting ? 200 : 201).json({
       ok: true,
       id: inserted?.id,
+      updated: updatedExisting,
+      message: updatedExisting
+        ? "Email đã có trong danh sách — đã cập nhật thông tin (không tạo bản ghi mới)."
+        : undefined,
       assignAdobe,
       ...assignPayload,
     });
@@ -189,7 +255,27 @@ const createListUser = async (req, res) => {
   }
 };
 
+const deleteListUser = async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id) || id < 1) {
+    return res.status(400).json({ error: "ID không hợp lệ." });
+  }
+
+  try {
+    const removed = await db(TRACK_TABLE).where(TRACK_COLS.ID, id).del();
+    if (!removed) {
+      return res.status(404).json({ error: "Không tìm thấy user trong list_user." });
+    }
+    logger.info("[renew-adobe] list_user: deleted id=%s", id);
+    return res.json({ ok: true, id });
+  } catch (error) {
+    logger.error("[renew-adobe] list_user delete failed", { id, error: error.message });
+    return res.status(500).json({ error: "Không xóa được user." });
+  }
+};
+
 module.exports = {
   listUserOrders,
   createListUser,
+  deleteListUser,
 };

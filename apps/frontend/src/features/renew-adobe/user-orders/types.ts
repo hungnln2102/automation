@@ -5,6 +5,7 @@ export type DisplayStatus = LicenseStatus | "no_product" | "not_added";
 
 export type UserOrderRow = {
   id: string;
+  listUserId: number | null;
   customer_name: string;
   email: string;
   profile: string;
@@ -25,4 +26,5 @@ export type OrderInfo = {
   adobe_account_id?: number | null;
   admin_license_status?: string | null;
   admin_org_name?: string | null;
+  otp_source?: "imap" | "tinyhost" | "hdsd" | "dongvan" | null;
 };

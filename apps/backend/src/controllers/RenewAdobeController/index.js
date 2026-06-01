@@ -14,7 +14,7 @@ const {
 const {
   checkAllAccounts: checkAllAccountsHandler,
 } = require("./autoAssign");
-const { listUserOrders, createListUser } = require("./userOrders");
+const { listUserOrders, createListUser, deleteListUser } = require("./userOrders");
 const { fixSingleUser, fixUsersRound } = require("./fixUserHandlers");
 const { runAutoDeleteUsers } = require("./autoDeleteUsersHandler");
 
@@ -36,6 +36,7 @@ module.exports = {
   checkAllAccounts,
   listUserOrders,
   createListUser,
+  deleteListUser,
   fixSingleUser,
   fixUsersRound,
   runAutoDeleteUsers,

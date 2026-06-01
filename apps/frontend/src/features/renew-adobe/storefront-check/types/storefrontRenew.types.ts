@@ -15,6 +15,18 @@ export type RenewCheckResultKind =
   | "info"
   | null;
 
+export type OtpResultType = "success" | "error" | "info" | null;
+
+export type StorefrontOtpPayload = {
+  success: boolean;
+  message?: string;
+  error?: string;
+  otp?: {
+    code: string;
+    source?: string;
+  };
+};
+
 export type StorefrontRenewOrderSnapshot = {
   orderCode: string | null;
   expiryDate: string | null;

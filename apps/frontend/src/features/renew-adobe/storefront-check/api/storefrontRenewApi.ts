@@ -1,5 +1,8 @@
 import { apiFetch } from "@/lib/api";
-import type { StorefrontRenewStatusPayload } from "../types/storefrontRenew.types";
+import type {
+  StorefrontRenewStatusPayload,
+  StorefrontOtpPayload,
+} from "../types/storefrontRenew.types";
 
 type ApiErrorShape = {
   success?: boolean;
@@ -35,6 +38,7 @@ function throwApiError(
 
 const STATUS_TIMEOUT_MS = 45_000;
 const ACTIVATE_TIMEOUT_MS = 600_000;
+const OTP_TIMEOUT_MS = 45_000;
 
 export async function fetchStorefrontRenewStatus(
   email: string,
@@ -91,6 +95,31 @@ export async function activateStorefrontRenewProfile(
       );
     }
     return data;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+export async function fetchStorefrontOtp(email: string): Promise<StorefrontOtpPayload> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), OTP_TIMEOUT_MS);
+  try {
+    const res = await apiFetch("/api/renew-adobe/public/otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email: email.trim() }),
+      signal: controller.signal,
+    });
+    const data = await readJsonSafe<StorefrontOtpPayload & ApiErrorShape>(res);
+    if (!res.ok || !data?.success) {
+      throwApiError(
+        res,
+        data ?? null,
+        data?.message || "Không lấy được OTP. Vui lòng thử lại sau.",
+      );
+    }
+    return data as StorefrontOtpPayload;
   } finally {
     clearTimeout(id);
   }

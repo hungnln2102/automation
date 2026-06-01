@@ -8,6 +8,10 @@ export type CreateListUserPayload = {
   org_name?: string | null;
   expired?: string | null;
   status?: string | null;
+  otp_source?: "tinyhost" | "hdsd" | "dongvan";
+  otp_refresh_token?: string;
+  otp_client_id?: string;
+  otp_mail_email?: string;
   /** Gọi luồng gán Adobe (profile + API add user) sau khi lưu DB, bỏ qua kiểm tra login trong Playwright */
   assignAdobeNow?: boolean;
 };
@@ -25,6 +29,8 @@ export function fetchRenewAdobeUserOrders(): Promise<OrderInfo[]> {
 export type CreateListUserResponse = {
   ok?: boolean;
   id?: number;
+  updated?: boolean;
+  message?: string;
   assignAdobe?: boolean;
   assign_error?: string;
   assign_already_linked?: boolean;
@@ -49,4 +55,15 @@ export async function createRenewAdobeListUser(
     throw new Error(data.error || "Không lưu được khách hàng.");
   }
   return { ok: !!data.ok, ...data };
+}
+
+export async function deleteRenewAdobeListUser(id: number): Promise<{ ok: boolean; id: number }> {
+  const res = await apiFetch(API_ENDPOINTS.RENEW_ADOBE_USER_ORDER_DELETE(id), {
+    method: "DELETE",
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean; id?: number };
+  if (!res.ok) {
+    throw new Error(data.error || "Không xóa được user.");
+  }
+  return { ok: !!data.ok, id: Number(data.id) || id };
 }

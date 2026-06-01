@@ -9,6 +9,7 @@ import {
 import { ResponsiveTable, TableCard } from "@/components/ui/ResponsiveTable";
 import Pagination from "@/components/ui/Pagination";
 import { maskPassword } from "../utils/accountUtils";
+import { otpSourceLabel } from "../otpSource";
 import type { AdobeAdminAccount } from "../types";
 import { StatusBadge } from "./StatusBadge";
 import { UrlAccessCell } from "./UrlAccessCell";
@@ -66,11 +67,6 @@ export function RenewAdobeAccountsTable({
 }: RenewAdobeAccountsTableProps) {
   const start = (currentPage - 1) * pageSize;
   const [editingAccount, setEditingAccount] = useState<AdobeAdminAccount | null>(null);
-  const otpSourceLabel = (source?: AdobeAdminAccount["otp_source"]) => {
-    if (source === "tinyhost") return "TinyHost";
-    if (source === "hdsd") return "otp.hdsd.net";
-    return "IMAP";
-  };
 
   return (
     <div className="space-y-6">

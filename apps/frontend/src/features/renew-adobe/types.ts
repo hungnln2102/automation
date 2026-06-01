@@ -4,7 +4,10 @@ export type AdobeAdminAccount = {
   id: number;
   email: string;
   password_encrypted: string;
-  otp_source?: "imap" | "tinyhost" | "hdsd";
+  otp_source?: "imap" | "tinyhost" | "hdsd" | "dongvan";
+  otp_refresh_token?: string | null;
+  otp_client_id?: string | null;
+  otp_mail_email?: string | null;
   /** mail_backup.alias_prefix (OTP / Gmail +alias) */
   alias?: string | null;
   org_name: string | null;

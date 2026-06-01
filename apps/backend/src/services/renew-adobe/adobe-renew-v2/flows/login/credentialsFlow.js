@@ -17,6 +17,9 @@ async function getAuthPageErrorReason(page) {
       if (/too many requests|rate limit|try again later/.test(text)) {
         return "Adobe auth báo giới hạn tần suất đăng nhập.";
       }
+      if (/incorrect password|wrong password|that's an incorrect password/.test(text)) {
+        return "Adobe auth báo mật khẩu sai — cập nhật cột password_encrypted (hoặc API cập nhật account) cho khớp Adobe ID.";
+      }
       return null;
     })
     .catch(() => null);

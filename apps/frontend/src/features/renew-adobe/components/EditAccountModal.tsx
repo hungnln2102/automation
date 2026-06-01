@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { AdobeAdminAccount } from "../types";
 import { updateAdobeAccount } from "../api/renewAdobeApi";
+import { WEB_OTP_SOURCE_OPTIONS, type RenewOtpSource } from "../otpSource";
+import {
+  DongvanOtpFields,
+  validateDongvanOtpFields,
+} from "./DongvanOtpFields";
 
 type EditAccountModalProps = {
   account: AdobeAdminAccount;
@@ -12,15 +17,25 @@ export function EditAccountModal({ account, onClose, onSaved }: EditAccountModal
   const [email, setEmail] = useState(account.email);
   const [password, setPassword] = useState(account.password_encrypted);
   const [orgName, setOrgName] = useState(account.org_name ?? "");
-  const [otpSource, setOtpSource] = useState<
-    "imap" | "tinyhost" | "hdsd"
-  >(account.otp_source ?? "imap");
+  const [otpSource, setOtpSource] = useState<RenewOtpSource>(
+    (account.otp_source ?? "imap") as RenewOtpSource,
+  );
+  const [otpRefreshToken, setOtpRefreshToken] = useState(account.otp_refresh_token ?? "");
+  const [otpClientId, setOtpClientId] = useState(account.otp_client_id ?? "");
+  const [otpMailEmail, setOtpMailEmail] = useState(account.otp_mail_email ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const dongvanErr = validateDongvanOtpFields(otpSource, otpRefreshToken, otpClientId);
+    if (dongvanErr) {
+      setError(dongvanErr);
+      return;
+    }
+
     setSaving(true);
     try {
       const payload: Record<string, string> = {};
@@ -28,6 +43,15 @@ export function EditAccountModal({ account, onClose, onSaved }: EditAccountModal
       if (password !== account.password_encrypted) payload.password_encrypted = password;
       if (orgName.trim() !== (account.org_name ?? "")) payload.org_name = orgName.trim();
       if ((account.otp_source ?? "imap") !== otpSource) payload.otp_source = otpSource;
+      if ((account.otp_refresh_token ?? "") !== otpRefreshToken.trim()) {
+        payload.otp_refresh_token = otpRefreshToken.trim();
+      }
+      if ((account.otp_client_id ?? "") !== otpClientId.trim()) {
+        payload.otp_client_id = otpClientId.trim();
+      }
+      if ((account.otp_mail_email ?? "") !== otpMailEmail.trim()) {
+        payload.otp_mail_email = otpMailEmail.trim();
+      }
 
       if (Object.keys(payload).length === 0) {
         onClose();
@@ -82,16 +106,28 @@ export function EditAccountModal({ account, onClose, onSaved }: EditAccountModal
             </label>
             <select
               value={otpSource}
-              onChange={(e) =>
-                setOtpSource(e.target.value as "imap" | "tinyhost" | "hdsd")
-              }
+              onChange={(e) => setOtpSource(e.target.value as RenewOtpSource)}
               className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none"
             >
               <option value="imap">IMAP (mail_backup/alias)</option>
-              <option value="tinyhost">TinyHost API</option>
-              <option value="hdsd">otp.hdsd.net API</option>
+              {WEB_OTP_SOURCE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
           </div>
+          {otpSource === "dongvan" ? (
+            <DongvanOtpFields
+              refreshToken={otpRefreshToken}
+              clientId={otpClientId}
+              onRefreshTokenChange={setOtpRefreshToken}
+              onClientIdChange={setOtpClientId}
+              onMailEmailChange={(value) => setOtpMailEmail(value ?? "")}
+              disabled={saving}
+              inputClass="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white font-mono focus:ring-2 focus:ring-indigo-500/50 outline-none"
+            />
+          ) : null}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Org Name</label>
             <input

@@ -7,9 +7,14 @@ const {
   getOrderUserTrackingCountsForAdminAccounts,
 } = require("../../services/renew-adobe/orderUserTrackingService");
 const { deleteAdminAccountById } = require("./accountDeletion");
+const { resolveDongvanOAuthFromBody } = require("../../services/dongvan/parseDongvanLine");
 
 const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DEFAULT_ADOBE_ADMIN_PASSWORD = "Adobe123@";
+
+function resolveAccountPassword(raw) {
+  const password = String(raw ?? "").trim();
+  return password || null;
+}
 
 const CHECK_EMPTY_COLS = [
   COLS.EMAIL,
@@ -42,10 +47,22 @@ function normalizeAccountOtpSource(raw) {
   return requestedOtpSource === "imap" ? "hdsd" : requestedOtpSource;
 }
 
-function buildNewAccountRow(email, otpSource) {
+function resolveOtpOAuthFields(body) {
+  return resolveDongvanOAuthFromBody(body);
+}
+
+function validateDongvanCredentials(otpSource, oauth) {
+  if (otpSource !== "dongvan") return null;
+  if (!oauth.refreshToken || !oauth.clientId) {
+    return "DongVan OTP cần dán dòng mail đầy đủ (email|...|token|client_id).";
+  }
+  return null;
+}
+
+function buildNewAccountRow(email, otpSource, password, oauth = {}) {
   return {
     [COLS.EMAIL]: email,
-    [COLS.PASSWORD_ENC]: DEFAULT_ADOBE_ADMIN_PASSWORD,
+    [COLS.PASSWORD_ENC]: password,
     [COLS.ORG_NAME]: null,
     [COLS.LICENSE_STATUS]: null,
     [COLS.USER_COUNT]: 0,
@@ -53,6 +70,11 @@ function buildNewAccountRow(email, otpSource) {
     [COLS.IS_ACTIVE]: true,
     [COLS.CREATED_AT]: db.fn.now(),
     ...(COLS.OTP_SOURCE ? { [COLS.OTP_SOURCE]: otpSource } : {}),
+    ...(COLS.OTP_REFRESH_TOKEN
+      ? { [COLS.OTP_REFRESH_TOKEN]: oauth.refreshToken ?? null }
+      : {}),
+    ...(COLS.OTP_CLIENT_ID ? { [COLS.OTP_CLIENT_ID]: oauth.clientId ?? null } : {}),
+    ...(COLS.OTP_MAIL_EMAIL ? { [COLS.OTP_MAIL_EMAIL]: oauth.mailEmail ?? null } : {}),
     ...(COLS.URL_ACCESS ? { [COLS.URL_ACCESS]: null } : {}),
   };
 }
@@ -82,6 +104,8 @@ const listAccounts = async (_req, res) => {
         `${TABLE}.${COLS.IS_ACTIVE}`,
         `${TABLE}.${COLS.CREATED_AT}`,
         ...(COLS.OTP_SOURCE ? [`${TABLE}.${COLS.OTP_SOURCE}`] : []),
+        ...(COLS.OTP_REFRESH_TOKEN ? [`${TABLE}.${COLS.OTP_REFRESH_TOKEN}`] : []),
+        ...(COLS.OTP_CLIENT_ID ? [`${TABLE}.${COLS.OTP_CLIENT_ID}`] : []),
         ...(COLS.URL_ACCESS ? [`${TABLE}.${COLS.URL_ACCESS}`] : []),
         ...(COLS.ID_PRODUCT ? [`${TABLE}.${COLS.ID_PRODUCT}`] : []),
         db.raw("NULL::text as alias")
@@ -146,6 +170,11 @@ const createAccount = async (req, res) => {
       .json({ error: "Automation moi khong su dung bang mail_backup." });
   }
 
+  const password = resolveAccountPassword(req.body?.password);
+  if (!password) {
+    return res.status(400).json({ error: "Thieu mat khau." });
+  }
+
   try {
     const existing = await db(TABLE).where(COLS.EMAIL, email).first();
     if (existing) {
@@ -155,9 +184,14 @@ const createAccount = async (req, res) => {
     }
 
     const otpSource = normalizeAccountOtpSource(req.body?.otp_source);
+    const oauth = resolveOtpOAuthFields(req.body);
+    const dongvanErr = validateDongvanCredentials(otpSource, oauth);
+    if (dongvanErr) {
+      return res.status(400).json({ error: dongvanErr });
+    }
 
     const [inserted] = await db(TABLE)
-      .insert(buildNewAccountRow(email, otpSource))
+      .insert(buildNewAccountRow(email, otpSource, password, oauth))
       .returning(COLS.ID);
 
     const id =
@@ -210,6 +244,11 @@ const createAccountsBulk = async (req, res) => {
     });
   }
 
+  const password = resolveAccountPassword(req.body?.password);
+  if (!password) {
+    return res.status(400).json({ error: "Thieu mat khau." });
+  }
+
   try {
     const existingRows = await db(TABLE)
       .select(COLS.EMAIL)
@@ -219,11 +258,16 @@ const createAccountsBulk = async (req, res) => {
     );
     const newEmails = emails.filter((email) => !existingEmails.has(email));
     const otpSource = normalizeAccountOtpSource(req.body?.otp_source);
+    const oauth = resolveOtpOAuthFields(req.body);
+    const dongvanErr = validateDongvanCredentials(otpSource, oauth);
+    if (dongvanErr) {
+      return res.status(400).json({ error: dongvanErr });
+    }
 
     let inserted = [];
     if (newEmails.length > 0) {
       inserted = await db(TABLE)
-        .insert(newEmails.map((email) => buildNewAccountRow(email, otpSource)))
+        .insert(newEmails.map((email) => buildNewAccountRow(email, otpSource, password, oauth)))
         .returning([COLS.ID, COLS.EMAIL]);
     }
 
@@ -247,7 +291,6 @@ const createAccountsBulk = async (req, res) => {
       created,
       skipped,
       invalid,
-      password_default: DEFAULT_ADOBE_ADMIN_PASSWORD,
     });
   } catch (error) {
     logger.error("[renew-adobe] Bulk create accounts failed", {
@@ -309,6 +352,9 @@ const updateAccount = async (req, res) => {
     password_encrypted: COLS.PASSWORD_ENC,
     org_name: COLS.ORG_NAME,
     otp_source: COLS.OTP_SOURCE,
+    otp_refresh_token: COLS.OTP_REFRESH_TOKEN,
+    otp_client_id: COLS.OTP_CLIENT_ID,
+    otp_mail_email: COLS.OTP_MAIL_EMAIL,
   };
 
   const updates = {};

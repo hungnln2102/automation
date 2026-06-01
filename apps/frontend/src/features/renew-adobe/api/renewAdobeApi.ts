@@ -56,16 +56,24 @@ export function deleteAdobeAdminAccount(id: number): Promise<{ success: boolean;
 
 export function createAdobeAdminAccount(payload: {
   email: string;
-  password?: string;
-  otp_source?: "imap" | "tinyhost" | "hdsd";
+  password: string;
+  otp_source?: "imap" | "tinyhost" | "hdsd" | "dongvan";
+  otp_refresh_token?: string;
+  otp_client_id?: string;
+  otp_mail_email?: string;
 }) {
   return apiFetch(API_ENDPOINTS.RENEW_ADOBE_ACCOUNTS, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       email: payload.email.trim(),
-      ...(payload.password ? { password: payload.password } : {}),
+      password: payload.password.trim(),
       ...(payload.otp_source ? { otp_source: payload.otp_source } : {}),
+      ...(payload.otp_refresh_token
+        ? { otp_refresh_token: payload.otp_refresh_token.trim() }
+        : {}),
+      ...(payload.otp_client_id ? { otp_client_id: payload.otp_client_id.trim() } : {}),
+      ...(payload.otp_mail_email ? { otp_mail_email: payload.otp_mail_email.trim() } : {}),
     }),
   }).then(async (res) => {
     const data = (await res.json().catch(() => ({}))) as {
@@ -82,20 +90,29 @@ export function createAdobeAdminAccount(payload: {
 
 export function createAdobeAdminAccountsBulk(payload: {
   emails: string[];
-  otp_source?: "imap" | "tinyhost" | "hdsd";
+  password: string;
+  otp_source?: "imap" | "tinyhost" | "hdsd" | "dongvan";
+  otp_refresh_token?: string;
+  otp_client_id?: string;
+  otp_mail_email?: string;
 }): Promise<{
   success: boolean;
   created: { id: number; email: string }[];
   skipped: string[];
   invalid: string[];
-  password_default?: string;
 }> {
   return apiFetch(API_ENDPOINTS.RENEW_ADOBE_ACCOUNTS_BULK, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       emails: payload.emails.map((email) => email.trim()).filter(Boolean),
+      password: payload.password.trim(),
       ...(payload.otp_source ? { otp_source: payload.otp_source } : {}),
+      ...(payload.otp_refresh_token
+        ? { otp_refresh_token: payload.otp_refresh_token.trim() }
+        : {}),
+      ...(payload.otp_client_id ? { otp_client_id: payload.otp_client_id.trim() } : {}),
+      ...(payload.otp_mail_email ? { otp_mail_email: payload.otp_mail_email.trim() } : {}),
     }),
   }).then(async (res) => {
     const data = (await res.json().catch(() => ({}))) as {
@@ -104,17 +121,15 @@ export function createAdobeAdminAccountsBulk(payload: {
       created?: { id: number; email: string }[];
       skipped?: string[];
       invalid?: string[];
-      password_default?: string;
     };
     if (!res.ok) {
-      throw new Error(data.error || res.statusText || "KhÃ´ng thÃªm Ä‘Æ°á»£c danh sÃ¡ch tÃ i khoáº£n.");
+      throw new Error(data.error || res.statusText || "Không thêm được danh sách tài khoản.");
     }
     return {
       success: data.success === true,
       created: data.created ?? [],
       skipped: data.skipped ?? [],
       invalid: data.invalid ?? [],
-      password_default: data.password_default,
     };
   });
 }
@@ -125,7 +140,10 @@ export function updateAdobeAccount(
     email?: string;
     password_encrypted?: string;
     org_name?: string;
-    otp_source?: "imap" | "tinyhost" | "hdsd";
+    otp_source?: "imap" | "tinyhost" | "hdsd" | "dongvan";
+    otp_refresh_token?: string;
+    otp_client_id?: string;
+    otp_mail_email?: string;
   }
 ): Promise<{ success: boolean; account?: Record<string, unknown>; error?: string }> {
   return apiFetch(`${API_ENDPOINTS.RENEW_ADOBE_ACCOUNTS}/${id}`, {

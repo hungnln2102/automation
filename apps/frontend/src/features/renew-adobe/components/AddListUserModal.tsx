@@ -1,7 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ModalPortal } from "@/components/ui/ModalPortal";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { createRenewAdobeListUser } from "@/features/renew-adobe/user-orders/api";
+import { WEB_OTP_SOURCE_OPTIONS, type RenewOtpSource } from "@/features/renew-adobe/otpSource";
+import {
+  buildDongvanOtpPayload,
+  DongvanOtpFields,
+  validateDongvanOtpFields,
+} from "@/features/renew-adobe/components/DongvanOtpFields";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,14 +25,23 @@ export function AddListUserModal({
   const [customer, setCustomer] = useState("");
   const [account, setAccount] = useState("");
   const [expired, setExpired] = useState("");
+  const [otpSource, setOtpSource] = useState<RenewOtpSource>("hdsd");
+  const [otpRefreshToken, setOtpRefreshToken] = useState("");
+  const [otpClientId, setOtpClientId] = useState("");
+  const [otpMailEmail, setOtpMailEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
     setCustomer("");
     setAccount("");
     setExpired("");
+    setOtpSource("hdsd");
+    setOtpRefreshToken("");
+    setOtpClientId("");
+    setOtpMailEmail("");
     setError(null);
     setLoading(false);
   }, [open]);
@@ -35,31 +50,46 @@ export function AddListUserModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || loading) return;
+
     const em = account.trim().toLowerCase();
     if (!EMAIL_RE.test(em)) {
       setError("Nhập email người dùng (Adobe) hợp lệ.");
       return;
     }
 
+    const dongvanErr = validateDongvanOtpFields(otpSource, otpRefreshToken, otpClientId);
+    if (dongvanErr) {
+      setError(dongvanErr);
+      return;
+    }
+
     setError(null);
+    submittingRef.current = true;
     setLoading(true);
     try {
       await createRenewAdobeListUser({
         customer: customer.trim() || null,
         account: em,
         expired: expired.trim() || null,
+        otp_source: otpSource,
+        ...buildDongvanOtpPayload(otpSource, otpRefreshToken, otpClientId, otpMailEmail),
       });
       onCreated();
       onClose();
     } catch (err) {
       setError((err as Error)?.message ?? "Không lưu được vào list_user.");
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
 
   const inputClass =
     "w-full rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 outline-none";
+
+  const selectClass =
+    "w-full rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 text-sm text-white focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/30 outline-none disabled:opacity-60";
 
   return (
     <ModalPortal>
@@ -137,6 +167,43 @@ export function AddListUserModal({
                 disabled={loading}
               />
             </div>
+
+            <div>
+              <label
+                htmlFor="add-list-user-otp-source"
+                className="mb-1 block text-xs font-medium text-white/60"
+              >
+                Nguồn OTP
+              </label>
+              <select
+                id="add-list-user-otp-source"
+                className={selectClass}
+                value={otpSource}
+                onChange={(ev) => setOtpSource(ev.target.value as RenewOtpSource)}
+                disabled={loading}
+              >
+                {WEB_OTP_SOURCE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-white/45">
+                Dùng để lấy mã OTP Adobe qua web cho email người dùng này.
+              </p>
+            </div>
+
+            {otpSource === "dongvan" ? (
+              <DongvanOtpFields
+                refreshToken={otpRefreshToken}
+                clientId={otpClientId}
+                onRefreshTokenChange={setOtpRefreshToken}
+                onClientIdChange={setOtpClientId}
+                onMailEmailChange={(value) => setOtpMailEmail(value ?? "")}
+                disabled={loading}
+                inputClass={inputClass}
+              />
+            ) : null}
 
             {error ? (
               <p className="text-sm text-rose-300" role="alert">

@@ -38,6 +38,7 @@ export default function RenewAdobeAdmin() {
     fixingId,
     fixAllProgress,
     handleDeleteUser,
+    handleDeleteListUser,
     handleFixUser,
     handleFixAllUsers,
     userOrdersRefreshKey,
@@ -121,6 +122,7 @@ export default function RenewAdobeAdmin() {
         <UserOrdersTable
           accountsRefreshDep={`k:${userOrdersRefreshKey}`}
           onDeleteUser={handleDeleteUser}
+          onDeleteListUser={handleDeleteListUser}
           deletingId={deletingId}
           onFixUser={handleFixUser}
           fixingId={fixingId}

@@ -128,7 +128,7 @@ async function runCheckForAccountId(id) {
   }
 
   const email = account[COLS.EMAIL];
-  const password = account[COLS.PASSWORD_ENC] || "";
+  const password = String(account[COLS.PASSWORD_ENC] || "").trim();
   if (!email || !password) {
     throw new Error("Thiếu email hoặc password_enc.");
   }

@@ -25,8 +25,10 @@ export function normalizeAdobeAdminAccount(
 
   const aliasRaw = row.alias;
   const rawOtpSource = String(row.otp_source ?? "imap").trim().toLowerCase();
-  const otpSource: "imap" | "tinyhost" | "hdsd" =
-    rawOtpSource === "tinyhost" || rawOtpSource === "hdsd"
+  const otpSource: "imap" | "tinyhost" | "hdsd" | "dongvan" =
+    rawOtpSource === "tinyhost" ||
+    rawOtpSource === "hdsd" ||
+    rawOtpSource === "dongvan"
       ? rawOtpSource
       : "imap";
   return {
@@ -34,6 +36,9 @@ export function normalizeAdobeAdminAccount(
     email: String(row.email ?? ""),
     password_encrypted: String(row.password_encrypted ?? row.password_enc ?? ""),
     otp_source: otpSource,
+    otp_refresh_token: row.otp_refresh_token != null ? String(row.otp_refresh_token) : null,
+    otp_client_id: row.otp_client_id != null ? String(row.otp_client_id) : null,
+    otp_mail_email: row.otp_mail_email != null ? String(row.otp_mail_email) : null,
     alias:
       aliasRaw != null && String(aliasRaw).trim() !== ""
         ? String(aliasRaw).trim()

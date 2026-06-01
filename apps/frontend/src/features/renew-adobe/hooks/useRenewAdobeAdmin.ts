@@ -6,6 +6,9 @@ import {
   fetchAdobeAdminAccounts,
   runSchedulerRenewAdobeCheck,
 } from "../api/renewAdobeApi";
+import {
+  deleteRenewAdobeListUser,
+} from "../user-orders/api";
 import type { AdobeAdminAccount } from "../types";
 import { normalizeIncomingLicenseStatus } from "../utils/accountUtils";
 
@@ -348,6 +351,23 @@ export function useRenewAdobeAdmin() {
     [loadAccounts]
   );
 
+  const handleDeleteListUser = useCallback(
+    (listUserId: number) => {
+      setCheckError(null);
+      const key = `lu-${listUserId}`;
+      setDeletingId(key);
+
+      deleteRenewAdobeListUser(listUserId)
+        .then(() => {
+          setUserOrdersRefreshKey((k) => k + 1);
+          loadAccounts();
+        })
+        .catch((err) => setCheckError(err?.message ?? "Lỗi khi xóa user khỏi danh sách."))
+        .finally(() => setDeletingId(null));
+    },
+    [loadAccounts]
+  );
+
   const handleFixUser = useCallback(
     (userEmail: string) => {
       if (fixAllInFlightRef.current) {
@@ -541,6 +561,7 @@ export function useRenewAdobeAdmin() {
     handleCancelCheckAll,
     handleTestCronJob,
     handleDeleteUser,
+    handleDeleteListUser,
     handleFixUser,
     handleFixAllUsers,
     handleSaveUrlAccess,

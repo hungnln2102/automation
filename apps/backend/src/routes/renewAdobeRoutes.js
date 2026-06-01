@@ -9,6 +9,7 @@ const {
   checkAllAccounts,
   listUserOrders,
   createListUser,
+  deleteListUser,
   fixSingleUser,
   fixUsersRound,
   runAutoDeleteUsers,
@@ -25,6 +26,7 @@ router.delete("/accounts/:id", deleteAccount);
 router.get("/accounts/check-all", checkAllAccounts);
 router.get("/user-orders", listUserOrders);
 router.post("/user-orders", createListUser);
+router.delete("/user-orders/:id", deleteListUser);
 router.post("/fix-user", fixSingleUser);
 router.post("/fix-users-round", fixUsersRound);
 router.post("/check-with-cookies", runCheckWithCookies);

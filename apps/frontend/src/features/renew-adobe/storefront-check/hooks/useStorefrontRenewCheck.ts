@@ -2,8 +2,10 @@ import { useState, type FormEvent } from "react";
 import {
   activateStorefrontRenewProfile,
   fetchStorefrontRenewStatus,
+  fetchStorefrontOtp,
 } from "../api/storefrontRenewApi";
 import type {
+  OtpResultType,
   RenewCheckResultKind,
   StorefrontRenewStatusCode,
   StorefrontRenewStatusPayload,
@@ -11,6 +13,7 @@ import type {
 
 export function useStorefrontRenewCheck() {
   const [email, setEmail] = useState("");
+  const [isCheckMode, setIsCheckMode] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const [activating, setActivating] = useState(false);
@@ -23,6 +26,12 @@ export function useStorefrontRenewCheck() {
   >(null);
   const [successNeedsProductLink, setSuccessNeedsProductLink] = useState(false);
   const [urlAccess, setUrlAccess] = useState<string | null>(null);
+
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpMessage, setOtpMessage] = useState<string | null>(null);
+  const [otpResultType, setOtpResultType] = useState<OtpResultType>(null);
 
   const resetResult = (options?: { preserveProfileName?: boolean }) => {
     setResultType(null);
@@ -95,6 +104,48 @@ export function useStorefrontRenewCheck() {
     }
   };
 
+  const resetOtp = () => {
+    setOtpSent(false);
+    setOtpCode("");
+    setOtpMessage(null);
+    setOtpResultType(null);
+  };
+
+  const handleSendOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setOtpResultType("error");
+      setOtpMessage("Vui lòng nhập email để lấy OTP.");
+      return;
+    }
+    if (sendingOtp) return;
+
+    setSendingOtp(true);
+    setOtpMessage(null);
+    setOtpResultType(null);
+    setOtpSent(false);
+    setOtpCode("");
+
+    try {
+      const data = await fetchStorefrontOtp(trimmed);
+      setOtpSent(true);
+      setOtpResultType("success");
+      setOtpMessage(data.message ?? `Đã lấy OTP cho ${trimmed}.`);
+      setOtpCode(data.otp?.code ?? "");
+    } catch (err) {
+      console.error("[renew-public-check] OTP error:", err);
+      setOtpResultType("error");
+      setOtpMessage(
+        err instanceof Error
+          ? err.message
+          : "Có lỗi kết nối tới máy chủ. Vui lòng thử lại sau.",
+      );
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   const handleActivate = async () => {
     if (!email.trim() || activating) return;
 
@@ -125,6 +176,8 @@ export function useStorefrontRenewCheck() {
   return {
     email,
     setEmail,
+    isCheckMode,
+    setIsCheckMode,
     loading,
     activating,
     resultType,
@@ -136,5 +189,12 @@ export function useStorefrontRenewCheck() {
     urlAccess,
     handleCheckSubmit,
     handleActivate,
+    otpSent,
+    otpCode,
+    sendingOtp,
+    otpMessage,
+    otpResultType,
+    handleSendOtp,
+    resetOtp,
   };
 }

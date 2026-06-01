@@ -36,6 +36,11 @@ async function buildAuthFailureSummary(page, contextLabel) {
     reason = "Adobe auth báo email không tồn tại/không liên kết.";
   } else if (/too many requests|rate limit|try again later/.test(lower)) {
     reason = "Adobe auth báo rate-limit.";
+  } else if (
+    /incorrect password|wrong password|that's an incorrect password/.test(lower)
+  ) {
+    reason =
+      "Adobe báo mật khẩu không đúng — kiểm tra password_encrypted trong DB hoặc chạy check sau khi đã lưu cookie session hợp lệ.";
   }
   return `${contextLabel} ${reason} url=${u.slice(0, 160)} body=${normalized}`;
 }

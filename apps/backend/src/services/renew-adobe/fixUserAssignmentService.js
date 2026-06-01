@@ -256,7 +256,7 @@ async function assignUserToAvailableAccount(userEmail, assignOpts = {}) {
     const target = available[attempt];
     const accountId = target[COLS.ID];
     const accountEmail = target[COLS.EMAIL];
-    const accountPassword = target[COLS.PASSWORD_ENC] || "";
+    const accountPassword = String(target[COLS.PASSWORD_ENC] || "").trim();
     const mailBackupId = null;
     const otpSource =
       COLS.OTP_SOURCE && target[COLS.OTP_SOURCE]
@@ -379,7 +379,7 @@ async function fixUsersOneRoundTightest(userEmailsRaw) {
     const target = available[ai];
     const accountId = target[COLS.ID];
     const accountEmail = target[COLS.EMAIL];
-    const accountPassword = target[COLS.PASSWORD_ENC] || "";
+    const accountPassword = String(target[COLS.PASSWORD_ENC] || "").trim();
 
     const freshCount = await getOrderUserTrackingCountByOrgName(
       target[COLS.ORG_NAME]

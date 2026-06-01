@@ -10,6 +10,8 @@ export const API_ENDPOINTS = {
   RENEW_ADOBE_CHECK_ALL: "/api/renew-adobe/accounts/check-all",
   SCHEDULER_RUN_ADOBE_CHECK: "/api/renew-adobe/accounts/check-all",
   RENEW_ADOBE_USER_ORDERS: "/api/renew-adobe/user-orders",
+  RENEW_ADOBE_USER_ORDER_DELETE: (id: number) =>
+    `/api/renew-adobe/user-orders/${id}`,
   RENEW_ADOBE_FIX_USER: "/api/renew-adobe/fix-user",
   RENEW_ADOBE_FIX_USERS_ROUND: "/api/renew-adobe/fix-users-round",
   RENEW_ADOBE_URL_ACCESS: (id: number) =>

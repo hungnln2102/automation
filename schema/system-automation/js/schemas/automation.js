@@ -11,6 +11,8 @@ const RENEW_ADOBE_SCHEMA = {
       USER_COUNT: "user_count",
       ALERT_CONFIG: "cookie_config",
       OTP_SOURCE: "otp_source",
+      OTP_REFRESH_TOKEN: "otp_refresh_token",
+      OTP_CLIENT_ID: "otp_client_id",
       LAST_CHECKED: "last_checked_at",
       IS_ACTIVE: "is_active",
       CREATED_AT: "created_at",
@@ -29,6 +31,9 @@ const RENEW_ADOBE_SCHEMA = {
       STATUS: "status",
       ID_PRODUCT: "id_product",
       UPDATED_AT: "update_at",
+      OTP_SOURCE: "otp_source",
+      OTP_REFRESH_TOKEN: "otp_refresh_token",
+      OTP_CLIENT_ID: "otp_client_id",
     },
   },
 };

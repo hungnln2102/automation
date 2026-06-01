@@ -75,6 +75,8 @@ export function flattenToUserRows(orders: OrderInfo[]): UserOrderRow[] {
     if (!email) continue;
     const aid = Number(order.adobe_account_id) || 0;
     const displayStatus = displayStatusFromOrder(order);
+    // Join org_name có thể gán nhầm admin id dù user vẫn "chưa add" — không dùng cho xóa Adobe.
+    const accountId = displayStatus === "not_added" ? 0 : aid;
     const orgTrack =
       order.tracking_org_name != null
         ? String(order.tracking_org_name).trim()
@@ -92,6 +94,7 @@ export function flattenToUserRows(orders: OrderInfo[]): UserOrderRow[] {
         : "";
     rows.push({
       id: lid ? `lu-${lid}` : aid > 0 ? `acc-${aid}-${email}` : `row-${email}`,
+      listUserId: lid ? Number(lid) : null,
       customer_name: order.customer || "—",
       email,
       profile,
@@ -99,7 +102,7 @@ export function flattenToUserRows(orders: OrderInfo[]): UserOrderRow[] {
       expiry: order.expiry_date
         ? Helpers.formatDateToDMY(order.expiry_date)
         : "—",
-      accountId: aid,
+      accountId: accountId,
     });
   }
   return rows;
