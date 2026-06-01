@@ -31,20 +31,37 @@ function normalizeListUserOtpSource(raw) {
   return requestedOtpSource === "imap" ? "hdsd" : requestedOtpSource;
 }
 
+function resolvePublicOtpMaxAgeMs() {
+  const raw = Number(process.env.OTP_PUBLIC_MAX_AGE_MS);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return 30 * 60 * 1000;
+}
+
+function pickListUserRowForOtp(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const withOauth = rows.find(
+    (row) =>
+      String(row[TRACK_COLS.OTP_REFRESH_TOKEN] ?? "").trim() &&
+      String(row[TRACK_COLS.OTP_CLIENT_ID] ?? "").trim()
+  );
+  return withOauth || rows[0];
+}
+
 async function fetchPublicOtpWithRetry({
   accountEmail,
   otpSource,
   oauth,
-  attempts = 4,
+  attempts = 5,
   intervalMs = 2500,
 }) {
-  const minTimestampMs = Date.now() - 15_000;
+  const minTimestampMs = Date.now() - resolvePublicOtpMaxAgeMs();
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const code = await fetchOtpBySource({
       otpSource,
       accountEmail,
       senderFilter: "adobe",
       minTimestampMs,
+      requireVerification: true,
       oauthRefreshToken: oauth?.refreshToken,
       oauthClientId: oauth?.clientId,
       oauthMailEmail: oauth?.mailEmail,
@@ -67,9 +84,11 @@ const sendPublicOtp = async (req, res) => {
   }
 
   try {
-    const row = await db(TRACK_TABLE)
+    const rows = await db(TRACK_TABLE)
       .whereRaw("LOWER(TRIM(COALESCE(??, ''))) = ?", [TRACK_COLS.ACCOUNT, email])
-      .first();
+      .orderBy(TRACK_COLS.ID, "desc");
+
+    const row = pickListUserRowForOtp(rows);
 
     if (!row) {
       return res.status(404).json({
@@ -82,6 +101,20 @@ const sendPublicOtp = async (req, res) => {
     const otpSource = normalizeListUserOtpSource(
       row[TRACK_COLS.OTP_SOURCE] ?? req.body?.otp_source ?? "hdsd"
     );
+
+    if (otpSource === "dongvan") {
+      const hasOauth =
+        String(row[TRACK_COLS.OTP_REFRESH_TOKEN] ?? "").trim() &&
+        String(row[TRACK_COLS.OTP_CLIENT_ID] ?? "").trim();
+      if (!hasOauth) {
+        logger.warn("[renew-adobe/public] DongVan thiếu oauth cho email=%s", email);
+        return res.status(400).json({
+          success: false,
+          error:
+            "Tài khoản chưa cấu hình DongVan OAuth (refresh token / client ID). Liên hệ hỗ trợ.",
+        });
+      }
+    }
 
     const code = await fetchPublicOtpWithRetry({
       accountEmail: email,
@@ -97,7 +130,7 @@ const sendPublicOtp = async (req, res) => {
       return res.status(404).json({
         success: false,
         message:
-          "Chưa lấy được OTP từ hệ thống web. Vui lòng thử lại sau vài giây.",
+          "Chưa lấy được OTP từ hệ thống web. Hãy yêu cầu mã Adobe mới rồi thử lại trong vài phút.",
       });
     }
 
@@ -125,4 +158,6 @@ const sendPublicOtp = async (req, res) => {
 
 module.exports = {
   sendPublicOtp,
+  resolvePublicOtpMaxAgeMs,
+  pickListUserRowForOtp,
 };

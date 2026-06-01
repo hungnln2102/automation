@@ -1,5 +1,3 @@
-jest.mock("../../../src/db", () => ({ db: {} }));
-
 const { pickOtpFromDongvanMessages } = require("../../../src/services/dongvan/dongvanOtpService");
 
 describe("dongvanOtpService.pickOtpFromDongvanMessages", () => {
@@ -22,6 +20,44 @@ describe("dongvanOtpService.pickOtpFromDongvanMessages", () => {
       { senderFilter: "adobe" }
     );
     expect(code).toBe("56924");
+  });
+
+  it("extracts code from verification email body when code column is empty", () => {
+    const code = pickOtpFromDongvanMessages(
+      [
+        {
+          date: "01:24 - 02/06/2026",
+          from: [{ address: "message@adobe.com" }],
+          subject: "Verification code",
+          code: "",
+          message:
+            "Your account can't be accessed without this verification code. Your Adobe verification code is 95110.",
+        },
+      ],
+      { senderFilter: "adobe", requireVerification: true }
+    );
+    expect(code).toBe("95110");
+  });
+
+  it("ignores marketing mail when requireVerification is true", () => {
+    const code = pickOtpFromDongvanMessages(
+      [
+        {
+          date: "11:15 - 29/05/2026",
+          from: [{ address: "mail@e.adobe.com" }],
+          subject: "Tips and techniques",
+          message: "Create eye-catching content for free",
+        },
+        {
+          date: "01:24 - 02/06/2026",
+          from: [{ address: "message@adobe.com" }],
+          subject: "Verification code",
+          message: "Your Adobe verification code is 123456.",
+        },
+      ],
+      { senderFilter: "adobe", requireVerification: true }
+    );
+    expect(code).toBe("123456");
   });
 
   it("ignores messages older than minTimestampMs", () => {

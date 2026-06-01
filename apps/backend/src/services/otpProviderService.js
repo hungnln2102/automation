@@ -169,6 +169,7 @@ async function fetchOtpBySource({
   oauthRefreshToken = null,
   oauthClientId = null,
   oauthMailEmail = null,
+  requireVerification = false,
 }) {
   const normalizedSource = normalizeOtpSource(otpSource, {
     hasMailBackupId: Number.isFinite(Number(mailBackupId)),
@@ -183,6 +184,7 @@ async function fetchOtpBySource({
       mailEmail: oauthMailEmail,
       senderFilter,
       minTimestampMs,
+      requireVerification,
       timeoutMs: 15000,
     });
   }

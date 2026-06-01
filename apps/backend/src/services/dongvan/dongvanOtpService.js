@@ -24,9 +24,28 @@ function normalizeEmail(value) {
 
 function extractOtpCode(raw) {
   if (raw == null) return null;
-  const str = String(raw);
-  const direct = str.match(/\b(\d{4,8})\b/);
-  return direct?.[1] || null;
+  const str = String(raw).replace(/<[^>]+>/g, " ");
+  const patterns = [
+    /verification\s*code\s*(?:is|:)?\s*(\d{4,8})/i,
+    /\bcode\s*(?:is|:)?\s*(\d{4,8})\b/i,
+    /\b(\d{6})\b/,
+    /\b(\d{4,8})\b/,
+  ];
+  for (const pattern of patterns) {
+    const match = str.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+function isAdobeVerificationMessage(row) {
+  const subject = String(row?.subject || "").toLowerCase();
+  const body = String(row?.message || "").toLowerCase();
+  return (
+    subject.includes("verification") ||
+    body.includes("verification code") ||
+    body.includes("can't be accessed without this verification code")
+  );
 }
 
 function parseMessageDateMs(raw) {
@@ -60,7 +79,14 @@ function messageMatchesSender(msg, senderFilter) {
   return subject.includes(needle) || body.includes(needle);
 }
 
-function pickOtpFromDongvanMessages(messages, { senderFilter = "adobe", minTimestampMs = null } = {}) {
+function pickOtpFromDongvanMessages(
+  messages,
+  {
+    senderFilter = "adobe",
+    minTimestampMs = null,
+    requireVerification = false,
+  } = {}
+) {
   const rows = Array.isArray(messages) ? [...messages] : [];
   rows.sort((a, b) => {
     const ta = parseMessageDateMs(a?.date) ?? 0;
@@ -70,6 +96,7 @@ function pickOtpFromDongvanMessages(messages, { senderFilter = "adobe", minTimes
 
   for (const row of rows) {
     if (!messageMatchesSender(row, senderFilter)) continue;
+    if (requireVerification && !isAdobeVerificationMessage(row)) continue;
     const rowMs = parseMessageDateMs(row?.date);
     if (Number.isFinite(minTimestampMs)) {
       if (!Number.isFinite(rowMs) || rowMs < minTimestampMs) {
@@ -83,6 +110,53 @@ function pickOtpFromDongvanMessages(messages, { senderFilter = "adobe", minTimes
     if (code) return code;
   }
   return null;
+}
+
+async function fetchOtpFromDongvanCodeApi({
+  mailboxEmail,
+  refreshToken,
+  clientId,
+  type = "adobe",
+  timeoutMs = 15000,
+}) {
+  const baseUrl = process.env.OTP_DONGVAN_BASE_URL || "https://tools.dongvanfb.net";
+  const endpoint = process.env.OTP_DONGVAN_CODE_ENDPOINT || "/api/get_code_oauth2";
+  const url = new URL(endpoint, baseUrl);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/plain;q=0.9, */*;q=0.8",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: mailboxEmail || "",
+        refresh_token: refreshToken,
+        client_id: clientId,
+        type,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json().catch(() => null);
+    if (!data || data.status === false) return null;
+
+    return (
+      extractOtpCode(data.code) ||
+      extractOtpCode(data.message) ||
+      extractOtpCode(data.content) ||
+      null
+    );
+  } catch (error) {
+    logger.warn("[dongvan-otp] get_code_oauth2 failed: %s", error.message);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function resolveDongvanOAuthCredentials(accountEmail, overrides = {}) {
@@ -187,6 +261,7 @@ async function fetchOtpFromDongvanApi({
   mailEmail = null,
   senderFilter = "adobe",
   minTimestampMs = null,
+  requireVerification = false,
   timeoutMs = 15000,
   listMail = "all",
 }) {
@@ -239,7 +314,21 @@ async function fetchOtpFromDongvanApi({
       return null;
     }
 
-    return pickOtpFromDongvanMessages(data.messages, { senderFilter, minTimestampMs });
+    const fromMessages = pickOtpFromDongvanMessages(data.messages, {
+      senderFilter,
+      minTimestampMs,
+      requireVerification,
+    });
+    if (fromMessages) return fromMessages;
+
+    const codeType = String(process.env.OTP_DONGVAN_CODE_TYPE || "adobe").trim() || "adobe";
+    return fetchOtpFromDongvanCodeApi({
+      mailboxEmail,
+      refreshToken: creds.refreshToken,
+      clientId: creds.clientId,
+      type: codeType,
+      timeoutMs,
+    });
   } catch (error) {
     logger.warn("[dongvan-otp] API read failed: %s", error.message);
     return null;
@@ -252,5 +341,8 @@ module.exports = {
   pickOtpFromDongvanMessages,
   resolveDongvanOAuthCredentials,
   fetchOtpFromDongvanApi,
+  fetchOtpFromDongvanCodeApi,
   parseDongvanLine,
+  extractOtpCode,
+  isAdobeVerificationMessage,
 };
