@@ -104,7 +104,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      exclude: ["lucide-react"],
+      include: ["lucide-react"],
     },
     test: {
       globals: true,
