@@ -45,6 +45,10 @@ export function normalizeAdobeAdminAccount(
         : null,
     org_name: row.org_name != null ? String(row.org_name) : null,
     user_count: Number(row.user_count) ?? 0,
+    slot_used_count:
+      row.slot_used_count != null && Number.isFinite(Number(row.slot_used_count))
+        ? Number(row.slot_used_count)
+        : 0,
     tracking_user_count:
       row.tracking_user_count != null &&
       Number.isFinite(Number(row.tracking_user_count))

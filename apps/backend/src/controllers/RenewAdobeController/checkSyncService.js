@@ -1,6 +1,6 @@
 const { db } = require("../../db");
 const { TABLE, COLS } = require("./accountTable");
-const { resolveLisenceCount, userCountDbValue } = require("./usersSnapshotUtils");
+const { resolveLisenceCount, userCountDbValue, withAdobeSlotsUsedInAlertConfig } = require("./usersSnapshotUtils");
 
 function buildCheckUpdatePayload({ scrapedData = {}, savedCookies = null } = {}) {
   let licenseForUserCount = resolveLisenceCount({
@@ -30,7 +30,9 @@ function buildCheckUpdatePayload({ scrapedData = {}, savedCookies = null } = {})
     payload[COLS.URL_ACCESS] = scrapedData.urlAccess;
   }
   if (COLS.ALERT_CONFIG && savedCookies) {
-    payload[COLS.ALERT_CONFIG] = savedCookies;
+    payload[COLS.ALERT_CONFIG] = Array.isArray(scrapedData.manageTeamMembers)
+      ? withAdobeSlotsUsedInAlertConfig(savedCookies, scrapedData.manageTeamMembers)
+      : savedCookies;
   }
 
   if (COLS.ID_PRODUCT) {

@@ -11,6 +11,8 @@ const OTP_SOURCES = {
   DONGVAN: "dongvan",
 };
 
+let warnedMissingHdsdToken = false;
+
 function normalizeOtpSource(rawValue, { hasMailBackupId = false } = {}) {
   const normalized = String(rawValue || "")
     .trim()
@@ -77,6 +79,13 @@ function resolveHdsdRows(data) {
   return [];
 }
 
+/** HDSD có thể trả timestamp giây hoặc ms — chuẩn hóa về ms. */
+function normalizeRowTimestampMs(raw) {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n < 1e12 ? n * 1000 : n;
+}
+
 async function fetchOtpFromHdsdApi({
   accountEmail,
   timeoutMs = 10000,
@@ -87,6 +96,12 @@ async function fetchOtpFromHdsdApi({
   const endpoint =
     process.env.OTP_HDSD_ENDPOINT || "/get_otp_api";
   const token = process.env.OTP_HDSD_TOKEN || "";
+  if (!token && !warnedMissingHdsdToken) {
+    warnedMissingHdsdToken = true;
+    logger.warn(
+      "[otp-provider] OTP_HDSD_TOKEN chưa cấu hình trong env — API otp.hdsd.net có thể không trả OTP"
+    );
+  }
 
   const url = new URL(endpoint, baseUrl);
 
@@ -108,7 +123,8 @@ async function fetchOtpFromHdsdApi({
     });
     if (!response.ok) {
       logger.warn(
-        "[otp-provider] HDSD API returned non-200: %s",
+        "[otp-provider] HDSD API email=%s status=%s",
+        accountEmail,
         response.status
       );
       return null;
@@ -127,21 +143,29 @@ async function fetchOtpFromHdsdApi({
             continue;
           }
           if (type === "warning" || type === "link") continue;
-          const rowTimestamp = Number.parseInt(
-            String(row?.timestamp_ms ?? row?.timestamp ?? ""),
-            10
+          const rowTimestamp = normalizeRowTimestampMs(
+            row?.timestamp_ms ?? row?.timestamp ?? row?.time
           );
           if (Number.isFinite(minTimestampMs) && Number.isFinite(rowTimestamp)) {
             if (rowTimestamp < Number(minTimestampMs)) continue;
           }
           const code = extractOtpCode(row?.value ?? row?.otp ?? row?.code);
-          if (code) return code;
+          if (code) {
+            logger.info("[otp-provider] HDSD OTP OK email=%s", accountEmail);
+            return code;
+          }
         }
       }
-      // Nếu payload có rows nhưng không row nào đạt điều kiện thời gian mới,
-      // không fallback sang quét toàn payload để tránh lấy lại OTP cũ.
       if (hasRows && Number.isFinite(minTimestampMs)) {
+        logger.warn(
+          "[otp-provider] HDSD: %d row(s) cho %s nhưng không có OTP mới sau challenge (lọc thời gian/adobe)",
+          rows.length,
+          accountEmail
+        );
         return null;
+      }
+      if (!hasRows) {
+        logger.info("[otp-provider] HDSD: chưa có mail OTP cho %s", accountEmail);
       }
       const candidates = collectOtpCandidates(data);
       for (const candidate of candidates) {
@@ -206,8 +230,28 @@ async function fetchOtpBySource({
     return fetchOtpFromHdsdApi({
       accountEmail: otpEmail,
       senderFilter,
-      timeoutMs: 10000,
+      timeoutMs: 15000,
       minTimestampMs,
+    });
+  }
+
+  if (normalizedSource === OTP_SOURCES.IMAP) {
+    let resolvedMailBackupId = Number.isFinite(Number(mailBackupId))
+      ? Number(mailBackupId)
+      : null;
+    if (!resolvedMailBackupId) {
+      const { getDefaultActiveMailBackupId } = require("./mailBackupService");
+      resolvedMailBackupId = await getDefaultActiveMailBackupId();
+    }
+    if (resolvedMailBackupId) {
+      return mailOtpService.fetchOtpFromEmail(resolvedMailBackupId, {
+        useEnvFallback: false,
+        senderFilter,
+      });
+    }
+    return mailOtpService.fetchOtpFromEmail(null, {
+      useEnvFallback: true,
+      senderFilter,
     });
   }
 

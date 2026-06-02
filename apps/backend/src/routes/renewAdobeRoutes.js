@@ -15,9 +15,20 @@ const {
   runAutoDeleteUsers,
   updateUrlAccess,
   updateAccount,
+  listMailBackupMailboxes,
+  createMailBackupMailbox,
+  updateMailBackupMailbox,
+  deleteMailBackupMailbox,
+  testMailBackupMailbox,
 } = require("../controllers/RenewAdobeController");
 
 const router = express.Router();
+
+router.get("/mail-backup", listMailBackupMailboxes);
+router.post("/mail-backup", createMailBackupMailbox);
+router.get("/mail-backup/:id/test", testMailBackupMailbox);
+router.patch("/mail-backup/:id", updateMailBackupMailbox);
+router.delete("/mail-backup/:id", deleteMailBackupMailbox);
 
 router.get("/accounts", listAccounts);
 router.post("/accounts", createAccount);

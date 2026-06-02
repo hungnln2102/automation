@@ -7,6 +7,13 @@ const {
   updateAccount,
 } = require("./accounts");
 const {
+  listMailBackupMailboxes,
+  createMailBackupMailbox,
+  updateMailBackupMailbox,
+  deleteMailBackupMailbox,
+  testMailBackupMailbox,
+} = require("./mailBackup");
+const {
   runCheckForAccountId,
   runCheck,
   runCheckWithCookies,
@@ -42,4 +49,9 @@ module.exports = {
   runAutoDeleteUsers,
   updateUrlAccess,
   updateAccount,
+  listMailBackupMailboxes,
+  createMailBackupMailbox,
+  updateMailBackupMailbox,
+  deleteMailBackupMailbox,
+  testMailBackupMailbox,
 };

@@ -131,6 +131,40 @@ function userCountDbValue(licenseCap, fallbackTeamCount) {
   return fb ?? 0;
 }
 
+/** Số user trên Adobe đang có gói (product Pro) — dùng cho cột SLOT x/y. */
+function countAdobeSlotsUsed(manageTeamMembers) {
+  if (!Array.isArray(manageTeamMembers)) return null;
+  return manageTeamMembers.filter((member) => {
+    if (member?.product === true || member?.hasPackage === true) return true;
+    const products = Array.isArray(member?.products) ? member.products : [];
+    return products.some((p) => {
+      if (p == null) return false;
+      if (typeof p === "string") return p.trim() !== "";
+      return String(p.id ?? p.productId ?? "").trim() !== "";
+    });
+  }).length;
+}
+
+function resolveAdobeSlotsUsed({ alertConfig = null, manageTeamMembers = null } = {}) {
+  const fromMembers = countAdobeSlotsUsed(manageTeamMembers);
+  if (fromMembers != null) return fromMembers;
+
+  const alertObj = parseObject(alertConfig);
+  return toNonNegativeNumber(
+    alertObj?.adobeSlotsUsed ??
+      alertObj?.adobe_slots_used ??
+      alertObj?.teamMembersWithPackageCount
+  );
+}
+
+function withAdobeSlotsUsedInAlertConfig(alertConfigRaw, manageTeamMembers) {
+  const used = countAdobeSlotsUsed(manageTeamMembers);
+  if (used == null) return alertConfigRaw;
+
+  const base = parseObject(alertConfigRaw) || {};
+  return { ...base, adobeSlotsUsed: used };
+}
+
 function normalizeSnapshotProducts(input) {
   if (input == null) return null;
   if (Array.isArray(input)) {
@@ -211,6 +245,12 @@ function mergeRenewAdobeAlertConfig(existingRaw, incomingRaw, usersSnapshotRaw =
       merged.contractActiveLicenseCount = fromUsers;
     }
   }
+  if (merged.adobeSlotsUsed == null) {
+    const fromExistingUsed = toNonNegativeNumber(existing.adobeSlotsUsed);
+    if (fromExistingUsed != null) {
+      merged.adobeSlotsUsed = fromExistingUsed;
+    }
+  }
   return merged;
 }
 
@@ -222,6 +262,9 @@ module.exports = {
   resolveAccountSeatLimit,
   resolveAccountUserLimit,
   userCountDbValue,
+  countAdobeSlotsUsed,
+  resolveAdobeSlotsUsed,
+  withAdobeSlotsUsedInAlertConfig,
   attachLisenceCount,
   mergeRenewAdobeAlertConfig,
   normalizeSnapshotProducts,

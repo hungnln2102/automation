@@ -192,6 +192,8 @@ export function useRenewAdobeAdmin() {
                     org_name: (event.org_name as string) ?? null,
                     user_count:
                       (event.user_count as number) ?? account.user_count,
+                    slot_used_count:
+                      (event.slot_used_count as number) ?? account.slot_used_count,
                     license_status: normalizeIncomingLicenseStatus(
                       event.license_status ?? account.license_status
                     ),

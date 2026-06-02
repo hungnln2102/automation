@@ -11,7 +11,7 @@ export default function RenewOrdersDeskPage() {
   const accountsRefreshDep = accounts
     .map(
       (a) =>
-        `${a.id}:${a.tracking_user_count ?? 0}:${a.user_count}:${a.license_status}`
+        `${a.id}:${a.slot_used_count ?? 0}:${a.user_count}:${a.license_status}`
     )
     .join("|");
 

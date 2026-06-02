@@ -6,6 +6,7 @@ const { persistCheckResult } = require("./checkSyncService");
 const {
   mergeRenewAdobeAlertConfig,
   resolveAccountSeatLimit,
+  resolveAdobeSlotsUsed,
 } = require("./usersSnapshotUtils");
 const {
   upsertRenewAdobeOrderUserTrackingForAccount,
@@ -134,7 +135,7 @@ async function runCheckForAccountId(id) {
     throw new Error("Thiếu email hoặc password_enc.");
   }
 
-  const otpOpts = resolveAdminOtpRuntimeOptions(account);
+  const otpOpts = await resolveAdminOtpRuntimeOptions(account);
   logger.info("[renew-adobe] Check account", { id, email });
 
   const existingUrlAccess =
@@ -478,6 +479,10 @@ const runCheck = async (req, res) => {
       org_name: account?.[COLS.ORG_NAME] ?? null,
       adobe_org_id: account?.[COLS.ADOBE_ORG_ID] ?? null,
       user_count: account?.[COLS.USER_COUNT] ?? 0,
+      slot_used_count:
+        resolveAdobeSlotsUsed({
+          alertConfig: account?.[COLS.ALERT_CONFIG],
+        }) ?? 0,
       license_status: account?.[COLS.LICENSE_STATUS] ?? "unknown",
       tracking_reconcile:
         trackingReconcile && typeof trackingReconcile === "object"

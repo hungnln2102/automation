@@ -1,6 +1,7 @@
 const { db } = require("../../db");
 const logger = require("../../utils/logger");
 const { TABLE, COLS } = require("./accountTable");
+const { resolveAdobeSlotsUsed } = require("./usersSnapshotUtils");
 
 function resolveCheckAllConcurrency(raw = process.env.RENEW_ADOBE_CHECK_ALL_CONCURRENCY) {
   const parsed = Number.parseInt(String(raw || ""), 10);
@@ -77,6 +78,10 @@ async function runCheckAllAccountsFlow({
         removed_from_db: removedFromDb,
         org_name: updated?.[COLS.ORG_NAME] ?? null,
         user_count: updated?.[COLS.USER_COUNT] ?? 0,
+        slot_used_count:
+          resolveAdobeSlotsUsed({
+            alertConfig: updated?.[COLS.ALERT_CONFIG],
+          }) ?? 0,
         license_status: removedFromDb
           ? "expired"
           : updated?.[COLS.LICENSE_STATUS] ?? "unknown",

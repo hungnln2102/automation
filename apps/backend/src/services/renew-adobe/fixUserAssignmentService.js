@@ -18,6 +18,7 @@ const {
   resolveAccountUserLimit,
   resolveAccountSeatLimit,
   userCountDbValue,
+  withAdobeSlotsUsedInAlertConfig,
 } = require("../../controllers/RenewAdobeController/usersSnapshotUtils");
 const {
   getOrderUserTrackingCountByOrgName,
@@ -205,10 +206,19 @@ async function persistAdminAfterAdd(target, accountId, v2) {
     ),
   };
   if (v2.savedCookies) {
-    updatePayload[COLS.ALERT_CONFIG] = mergeRenewAdobeAlertConfig(
+    const merged = mergeRenewAdobeAlertConfig(
       target[COLS.ALERT_CONFIG],
       v2.savedCookies,
       null
+    );
+    updatePayload[COLS.ALERT_CONFIG] = withAdobeSlotsUsedInAlertConfig(
+      merged,
+      v2.manageTeamMembers
+    );
+  } else if (Array.isArray(v2.manageTeamMembers)) {
+    updatePayload[COLS.ALERT_CONFIG] = withAdobeSlotsUsedInAlertConfig(
+      target[COLS.ALERT_CONFIG],
+      v2.manageTeamMembers
     );
   }
   await db(TABLE).where(COLS.ID, accountId).update(updatePayload);
@@ -258,7 +268,7 @@ async function assignUserToAvailableAccount(userEmail, assignOpts = {}) {
     const accountId = target[COLS.ID];
     const accountEmail = target[COLS.EMAIL];
     const accountPassword = String(target[COLS.PASSWORD_ENC] || "").trim();
-    const otpOpts = resolveAdminOtpRuntimeOptions(target);
+    const otpOpts = await resolveAdminOtpRuntimeOptions(target);
 
     let v2;
     try {
@@ -389,7 +399,7 @@ async function fixUsersOneRoundTightest(userEmailsRaw) {
     const chunk = needAdd.slice(0, take);
     const stillRemaining = needAdd.slice(take);
 
-    const otpOpts = resolveAdminOtpRuntimeOptions(target);
+    const otpOpts = await resolveAdminOtpRuntimeOptions(target);
 
     logger.info(
       "[renew-adobe] fixUsersOneRoundTightest: account=%s slot=%s batch=%s",

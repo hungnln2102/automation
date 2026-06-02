@@ -16,4 +16,7 @@ export const API_ENDPOINTS = {
   RENEW_ADOBE_FIX_USERS_ROUND: "/api/renew-adobe/fix-users-round",
   RENEW_ADOBE_URL_ACCESS: (id: number) =>
     `/api/renew-adobe/accounts/${id}/url-access`,
+  RENEW_ADOBE_MAIL_BACKUP: "/api/renew-adobe/mail-backup",
+  RENEW_ADOBE_MAIL_BACKUP_ITEM: (id: number) => `/api/renew-adobe/mail-backup/${id}`,
+  RENEW_ADOBE_MAIL_BACKUP_TEST: (id: number) => `/api/renew-adobe/mail-backup/${id}/test`,
 } as const;

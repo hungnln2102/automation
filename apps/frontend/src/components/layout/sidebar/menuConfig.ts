@@ -1,6 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 import {
   ArrowPathIcon,
+  EnvelopeIcon,
   MagnifyingGlassIcon,
   RectangleStackIcon,
   UserGroupIcon,
@@ -52,6 +53,11 @@ export const menuSections: MenuSection[] = [
         name: "Đơn Renew (bàn làm việc)",
         href: "/renew-orders",
         icon: RectangleStackIcon,
+      },
+      {
+        name: "Mail Backup (IMAP)",
+        href: "/mail-backup",
+        icon: EnvelopeIcon,
       },
     ],
   },

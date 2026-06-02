@@ -11,6 +11,8 @@
     "dev:backend": "node scripts/dev-backend.cjs",
     "dev:frontend": "node scripts/dev-frontend.cjs",
     "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "db:check": "node scripts/check-db.cjs",
+    "tunnel:vps": "powershell -ExecutionPolicy Bypass -File scripts/open-vps-db-tunnel.ps1",
     "migrate": "node scripts/backend-run.cjs migrate",
     "migrate:status": "node scripts/backend-run.cjs migrate:status",
     "db:doctor": "node scripts/db-doctor.cjs",

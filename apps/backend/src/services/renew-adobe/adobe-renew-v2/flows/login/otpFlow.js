@@ -56,6 +56,34 @@ async function fillOtpInputs(page, code) {
   return true;
 }
 
+async function submitOtpForm(page) {
+  await page.waitForTimeout(LOGIN_TIMEOUTS.OTP_POST_FILL_WAIT_MS);
+
+  const multiInputs = page.locator('input[maxlength="1"]:visible');
+  const multiCount = await multiInputs.count().catch(() => 0);
+  if (multiCount >= 4) {
+    await multiInputs.last().press("Enter");
+    logger.info("[adobe-v2] OTP submit qua Enter (multi-digit)");
+    return;
+  }
+
+  const otpInput = page
+    .locator('input[autocomplete="one-time-code"], input[inputmode="numeric"]:visible')
+    .first();
+  if (await otpInput.isVisible().catch(() => false)) {
+    await otpInput.press("Enter");
+    logger.info("[adobe-v2] OTP submit qua Enter (single field)");
+    return;
+  }
+
+  await page
+    .locator('[data-id="Page-PrimaryButton"]')
+    .first()
+    .click({ timeout: 5000 })
+    .catch(() => {});
+  logger.info("[adobe-v2] OTP submit qua Page-PrimaryButton");
+}
+
 async function handleOtpChallenge(page, otpOptions = {}, { stage = "unknown" } = {}) {
   const challengeStartedAt = Date.now();
   await page.waitForTimeout(LOGIN_TIMEOUTS.OTP_INITIAL_WAIT_MS);
@@ -70,9 +98,10 @@ async function handleOtpChallenge(page, otpOptions = {}, { stage = "unknown" } =
     hasMailBackupId: Number.isFinite(Number(otpOptions.mailBackupId)),
   });
   logger.info(
-    "[adobe-v2] OTP stage=%s: source=%s account=%s otpMail=%s",
+    "[adobe-v2] OTP stage=%s: source=%s mailBackupId=%s account=%s otpMail=%s",
     stage,
     normalizedSource,
+    Number.isFinite(Number(otpOptions.mailBackupId)) ? otpOptions.mailBackupId : "—",
     String(otpOptions.accountEmail || "").slice(0, 80),
     String(otpOptions.otpMailEmail || otpOptions.accountEmail || "").slice(0, 80)
   );
@@ -104,13 +133,8 @@ async function handleOtpChallenge(page, otpOptions = {}, { stage = "unknown" } =
     await fillOtpInputs(page, code);
     logger.info("[adobe-v2] OTP stage=%s: đã điền OTP=%s", stage, maskOtp(code));
 
-    await page.waitForTimeout(LOGIN_TIMEOUTS.SMALL_WAIT_MS);
-    await page
-      .locator('[data-id="Page-PrimaryButton"], button[type="submit"]')
-      .first()
-      .click({ timeout: 3000 })
-      .catch(() => {});
-    await page.waitForTimeout(LOGIN_TIMEOUTS.LARGE_WAIT_MS);
+    await submitOtpForm(page);
+    logger.info("[adobe-v2] OTP stage=%s: đã submit OTP, chờ màn password (credentialsFlow)", stage);
     return;
   }
 

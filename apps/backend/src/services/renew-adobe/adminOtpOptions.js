@@ -1,4 +1,5 @@
 const { COLS } = require("../../controllers/RenewAdobeController/accountTable");
+const { resolveMailBackupIdForAccount } = require("../mailBackupService");
 
 function normalizeEmailValue(raw) {
   const s = String(raw ?? "").trim().toLowerCase();
@@ -11,14 +12,16 @@ function resolveOtpMailEmailFromAccount(account) {
 }
 
 /** OTP runtime options từ dòng accounts_admin (check / add / delete). */
-function resolveAdminOtpRuntimeOptions(account) {
+async function resolveAdminOtpRuntimeOptions(account) {
   const otpSource =
     COLS.OTP_SOURCE && account?.[COLS.OTP_SOURCE]
       ? String(account[COLS.OTP_SOURCE]).trim().toLowerCase()
       : "imap";
 
+  const mailBackupId = await resolveMailBackupIdForAccount(account);
+
   return {
-    mailBackupId: null,
+    mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
     otpSource,
     otpMailEmail: resolveOtpMailEmailFromAccount(account),
     oauthRefreshToken:

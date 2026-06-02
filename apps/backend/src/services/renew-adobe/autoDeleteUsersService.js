@@ -71,7 +71,7 @@ async function autoDeleteUsersForAccountId(accountId, userEmails) {
 
   const email = account[COLS.EMAIL];
   const password = String(account[COLS.PASSWORD_ENC] || "").trim();
-  const otpOpts = resolveAdminOtpRuntimeOptions(account);
+  const otpOpts = await resolveAdminOtpRuntimeOptions(account);
 
   logger.info("[renew-adobe] Auto-delete users (Adobe + list_user)", {
     accountId,

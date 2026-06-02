@@ -11,6 +11,8 @@ const IDENTITY_SCHEMA = {
       CREATED_AT: "created_at",
       UPDATED_AT: "updated_at",
       ALIAS_PREFIX: "alias_prefix",
+      ACCOUNT_PASSWORD: "account_password",
+      IS_DEFAULT: "is_default",
     },
   },
 };

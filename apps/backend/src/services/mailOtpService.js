@@ -43,6 +43,10 @@ function getImapHostFromProvider(provider) {
  * @param {number} mailBackupId
  * @returns {Promise<{ email: string, app_password: string, provider: string, alias_prefix?: string }|null>}
  */
+function normalizeImapPassword(raw) {
+  return String(raw ?? "").replace(/\s+/g, "").trim();
+}
+
 async function getMailBackupById(mailBackupId) {
   if (!MAIL_BACKUP_TABLE || !mailBackupId) return null;
   try {
@@ -54,7 +58,7 @@ async function getMailBackupById(mailBackupId) {
     const aliasPrefix = MB_COLS.ALIAS_PREFIX && row[MB_COLS.ALIAS_PREFIX] != null ? String(row[MB_COLS.ALIAS_PREFIX]).trim() : "";
     return {
       email: row[MB_COLS.EMAIL],
-      app_password: row[MB_COLS.APP_PASSWORD],
+      app_password: normalizeImapPassword(row[MB_COLS.APP_PASSWORD]),
       provider: row[MB_COLS.PROVIDER] || "gmail",
       ...(aliasPrefix ? { alias_prefix: aliasPrefix } : {}),
     };
@@ -62,6 +66,15 @@ async function getMailBackupById(mailBackupId) {
     logger.warn("[mailOtpService] getMailBackupById lỗi: %s", err.message);
     return null;
   }
+}
+
+function formatImapError(err) {
+  if (!err) return "unknown";
+  const parts = [err.message];
+  if (err.responseText) parts.push(String(err.responseText).trim());
+  if (err.authenticationFailed) parts.push("authenticationFailed=true");
+  if (err.responseStatus) parts.push(`status=${err.responseStatus}`);
+  return parts.filter(Boolean).join(" | ");
 }
 
 /**
@@ -166,8 +179,17 @@ async function fetchOtpFromEmail(mailBackupId = null, options = {}) {
   if (debugToConsole) console.log("[mailOtpService] [OTP] Bắt đầu kết nối IMAP và tìm mail OTP...");
   const onlyAdobe = senderFilter === "adobe";
   const mask = (s) => (s && s.length > 4 ? s.slice(0, 2) + "***" + s.slice(-2) : "***");
-  const aliasPrefixVal = backup?.alias_prefix ?? "(env)";
-  log("[mailOtpService] [OTP DEBUG] Lấy OTP: host=%s, user=%s, onlyAdobe=%s, alias_prefix=%s", host, mask(user), onlyAdobe, aliasPrefixVal);
+  const aliasPrefixVal = backup
+    ? backup.alias_prefix || "(mailbox — không lọc alias)"
+    : "(env-fallback)";
+  log(
+    "[mailOtpService] [OTP DEBUG] Lấy OTP: mailBackupId=%s host=%s user=%s onlyAdobe=%s alias=%s",
+    mailBackupId ?? "—",
+    host,
+    mask(user),
+    onlyAdobe,
+    aliasPrefixVal
+  );
   try {
     const { ImapFlow } = require("imapflow");
     const client = new ImapFlow({
@@ -289,7 +311,7 @@ async function fetchOtpFromEmail(mailBackupId = null, options = {}) {
       await client.logout();
     }
   } catch (err) {
-    logger.warn("[mailOtpService] fetchOtpFromEmail lỗi: %s", err.message);
+    logger.warn("[mailOtpService] fetchOtpFromEmail lỗi: %s", formatImapError(err));
     return null;
   }
 }
@@ -327,10 +349,14 @@ async function hasOtpConfig(mailBackupId = null) {
  */
 async function getInboxCount(mailBackupId) {
   const backup = await getMailBackupById(mailBackupId);
-  if (!backup) return null;
+  if (!backup) {
+    throw new Error(`Không tìm thấy mail_backup id=${mailBackupId} (hoặc is_active=false).`);
+  }
   const host = getImapHostFromProvider(backup.provider);
-  const { user, app_password: pass } = backup;
-  if (!host || !user || !pass) return null;
+  const { email: user, app_password: pass } = backup;
+  if (!host || !user || !pass) {
+    throw new Error("Thiếu email/app_password trong mail_backup.");
+  }
   try {
     const { ImapFlow } = require("imapflow");
     const client = new ImapFlow({
@@ -350,9 +376,24 @@ async function getInboxCount(mailBackupId) {
       await client.logout();
     }
   } catch (err) {
-    logger.warn("[mailOtpService] getInboxCount lỗi: %s", err.message);
-    return null;
+    logger.warn("[mailOtpService] getInboxCount lỗi: %s", formatImapError(err));
+    throw new Error(formatImapError(err));
   }
+}
+
+/** Kiểm tra IMAP login — dùng cho API test mail_backup. */
+async function testImapMailBackup(mailBackupId) {
+  const backup = await getMailBackupById(mailBackupId);
+  if (!backup) {
+    throw new Error(`Không tìm thấy mail_backup id=${mailBackupId}.`);
+  }
+  const inboxCount = await getInboxCount(mailBackupId);
+  return {
+    ok: true,
+    email: backup.email,
+    inbox_count: inboxCount ?? 0,
+    app_password_length: String(backup.app_password || "").length,
+  };
 }
 
 /**
@@ -364,7 +405,7 @@ async function getConnectionDebug(mailBackupId) {
   const backup = await getMailBackupById(mailBackupId);
   if (!backup) return { searchAllType: "", searchAllLength: 0, uidListLength: 0, mailboxExists: 0, error: "getMailBackupById null" };
   const host = getImapHostFromProvider(backup.provider);
-  const { user, app_password: pass } = backup;
+  const { email: user, app_password: pass } = backup;
   if (!host || !user || !pass) return { searchAllType: "", searchAllLength: 0, uidListLength: 0, mailboxExists: 0, error: "missing credentials" };
   try {
     const { ImapFlow } = require("imapflow");
@@ -408,7 +449,7 @@ async function listRecentEmails(mailBackupId, options = {}) {
   const backup = await getMailBackupById(mailBackupId);
   if (!backup) return [];
   const host = getImapHostFromProvider(backup.provider);
-  const { user, app_password: pass } = backup;
+  const { email: user, app_password: pass } = backup;
   if (!host || !user || !pass) return [];
   try {
     const { ImapFlow } = require("imapflow");
@@ -492,7 +533,7 @@ async function fetchLastAdobeEmailRaw(mailBackupId, options = {}) {
   const backup = await getMailBackupById(mailBackupId);
   if (!backup) return null;
   const host = getImapHostFromProvider(backup.provider);
-  const { user, app_password: pass } = backup;
+  const { email: user, app_password: pass } = backup;
   if (!host || !user || !pass) return null;
   try {
     const { ImapFlow } = require("imapflow");
@@ -652,6 +693,7 @@ module.exports = {
   fetchOtpFromAdobeEmail,
   hasOtpConfig,
   getInboxCount,
+  testImapMailBackup,
   getConnectionDebug,
   listRecentEmails,
   fetchLastAdobeEmailRaw,

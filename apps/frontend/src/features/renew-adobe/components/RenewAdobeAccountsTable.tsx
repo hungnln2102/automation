@@ -15,9 +15,9 @@ import { StatusBadge } from "./StatusBadge";
 import { UrlAccessCell } from "./UrlAccessCell";
 import { EditAccountModal } from "./EditAccountModal";
 
-/** x = số dòng order_user_tracking khớp org; y = user_count (slot license). */
+/** x = số user trên Adobe đang có gói; y = user_count (slot license cap). */
 function formatSlotRatio(account: AdobeAdminAccount): string {
-  const x = account.tracking_user_count ?? 0;
+  const x = account.slot_used_count ?? 0;
   const y = Number(account.user_count) || 0;
   return `${x}/${y}`;
 }
@@ -213,7 +213,7 @@ export function RenewAdobeAccountsTable({
                   <th className="min-w-[120px]">OTP SOURCE</th>
                   <th className="min-w-[140px]">TEAM</th>
                   <th className="min-w-[120px]">ID PRODUCT</th>
-                  <th className="w-28 text-center" title="user tracking / user_count">
+                  <th className="w-28 text-center" title="user có gói trên Adobe / slot license">
                     SLOT
                   </th>
                   <th className="w-36">LICENSE</th>

@@ -6,13 +6,21 @@ const { normalizeOtpSource } = require("../../services/otpProviderService");
 const {
   getOrderUserTrackingCountsForAdminAccounts,
 } = require("../../services/renew-adobe/orderUserTrackingService");
+const { resolveAdobeSlotsUsed } = require("./usersSnapshotUtils");
 const { deleteAdminAccountById } = require("./accountDeletion");
 const { resolveDongvanOAuthFromBody } = require("../../services/dongvan/parseDongvanLine");
+const {
+  listMailBackupMailboxes,
+  createMailBackupMailbox,
+  updateMailBackupMailbox,
+  deleteMailBackupMailbox,
+} = require("./mailBackup");
+const mailBackupService = require("../../services/mailBackupService");
 
 const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function resolveAccountPassword(raw) {
-  const password = String(raw ?? "").trim();
+  const password = String(raw ?? "");
   return password || null;
 }
 
@@ -40,11 +48,8 @@ function getEmptyFields(row) {
   return CHECK_EMPTY_COLS.filter((col) => isValueEmpty(row[col]));
 }
 
-function normalizeAccountOtpSource(raw) {
-  const requestedOtpSource = normalizeOtpSource(raw, {
-    hasMailBackupId: false,
-  });
-  return requestedOtpSource === "imap" ? "hdsd" : requestedOtpSource;
+function normalizeAccountOtpSource(raw, { hasMailBackupId = false } = {}) {
+  return normalizeOtpSource(raw, { hasMailBackupId });
 }
 
 function resolveOtpOAuthFields(body) {
@@ -59,7 +64,7 @@ function validateDongvanCredentials(otpSource, oauth) {
   return null;
 }
 
-function buildNewAccountRow(email, otpSource, password, oauth = {}) {
+function buildNewAccountRow(email, otpSource, password, oauth = {}, mailBackupId = null) {
   return {
     [COLS.EMAIL]: email,
     [COLS.PASSWORD_ENC]: password,
@@ -75,19 +80,28 @@ function buildNewAccountRow(email, otpSource, password, oauth = {}) {
       : {}),
     ...(COLS.OTP_CLIENT_ID ? { [COLS.OTP_CLIENT_ID]: oauth.clientId ?? null } : {}),
     ...(COLS.OTP_MAIL_EMAIL ? { [COLS.OTP_MAIL_EMAIL]: oauth.mailEmail ?? null } : {}),
+    ...(COLS.MAIL_BACKUP_ID && mailBackupId
+      ? { [COLS.MAIL_BACKUP_ID]: mailBackupId }
+      : {}),
     ...(COLS.URL_ACCESS ? { [COLS.URL_ACCESS]: null } : {}),
   };
 }
 
-const listMailBackupMailboxes = async (_req, res) => {
-  return res.json([]);
-};
-
-const createMailBackupMailbox = async (_req, res) => {
-  return res
-    .status(400)
-    .json({ error: "Automation moi khong su dung bang mail_backup." });
-};
+async function resolveMailBackupIdInput(body) {
+  if (body?.mail_backup_id == null || String(body.mail_backup_id).trim() === "") {
+    return null;
+  }
+  const id = Number(body.mail_backup_id);
+  if (!Number.isFinite(id) || id < 1) {
+    throw new Error("mail_backup_id khong hop le.");
+  }
+  const row = await mailBackupService.getMailBackupById(id);
+  const MB = mailBackupService.MB_COLS;
+  if (!row || row[MB.IS_ACTIVE] === false) {
+    throw new Error("Khong tim thay mail IMAP (mail_backup_id).");
+  }
+  return id;
+}
 
 const listAccounts = async (_req, res) => {
   try {
@@ -107,8 +121,10 @@ const listAccounts = async (_req, res) => {
         ...(COLS.OTP_REFRESH_TOKEN ? [`${TABLE}.${COLS.OTP_REFRESH_TOKEN}`] : []),
         ...(COLS.OTP_CLIENT_ID ? [`${TABLE}.${COLS.OTP_CLIENT_ID}`] : []),
         ...(COLS.OTP_MAIL_EMAIL ? [`${TABLE}.${COLS.OTP_MAIL_EMAIL}`] : []),
+        ...(COLS.MAIL_BACKUP_ID ? [`${TABLE}.${COLS.MAIL_BACKUP_ID}`] : []),
         ...(COLS.URL_ACCESS ? [`${TABLE}.${COLS.URL_ACCESS}`] : []),
         ...(COLS.ID_PRODUCT ? [`${TABLE}.${COLS.ID_PRODUCT}`] : []),
+        ...(COLS.ALERT_CONFIG ? [`${TABLE}.${COLS.ALERT_CONFIG}`] : []),
         db.raw("NULL::text as alias")
       )
       .orderBy(`${TABLE}.${COLS.ID}`, "asc");
@@ -119,11 +135,19 @@ const listAccounts = async (_req, res) => {
       COLS.ORG_NAME
     );
 
-    const payload = rows.map((row) => ({
-      ...row,
-      empty_fields: getEmptyFields(row),
-      tracking_user_count: trackingByAccountId.get(Number(row[COLS.ID])) ?? 0,
-    }));
+    const payload = rows.map((row) => {
+      const alertConfig = COLS.ALERT_CONFIG ? row[COLS.ALERT_CONFIG] : null;
+      const safeRow = { ...row };
+      if (COLS.ALERT_CONFIG) {
+        delete safeRow[COLS.ALERT_CONFIG];
+      }
+      return {
+        ...safeRow,
+        empty_fields: getEmptyFields(row),
+        tracking_user_count: trackingByAccountId.get(Number(row[COLS.ID])) ?? 0,
+        slot_used_count: resolveAdobeSlotsUsed({ alertConfig }) ?? 0,
+      };
+    });
 
     logger.info("[renew-adobe] List accounts", { total: payload.length });
     return res.json(payload);
@@ -165,10 +189,12 @@ const createAccount = async (req, res) => {
   if (!email || !EMAIL_OK.test(email)) {
     return res.status(400).json({ error: "Email khong hop le." });
   }
-  if (req.body?.mail_backup_id != null && String(req.body.mail_backup_id).trim() !== "") {
-    return res
-      .status(400)
-      .json({ error: "Automation moi khong su dung bang mail_backup." });
+
+  let mailBackupId = null;
+  try {
+    mailBackupId = await resolveMailBackupIdInput(req.body);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 
   const password = resolveAccountPassword(req.body?.password);
@@ -184,7 +210,9 @@ const createAccount = async (req, res) => {
         .json({ error: "Email nay da co trong danh sach tai khoan admin." });
     }
 
-    const otpSource = normalizeAccountOtpSource(req.body?.otp_source);
+    const otpSource = normalizeAccountOtpSource(req.body?.otp_source, {
+      hasMailBackupId: mailBackupId != null,
+    });
     const oauth = resolveOtpOAuthFields(req.body);
     const dongvanErr = validateDongvanCredentials(otpSource, oauth);
     if (dongvanErr) {
@@ -192,7 +220,7 @@ const createAccount = async (req, res) => {
     }
 
     const [inserted] = await db(TABLE)
-      .insert(buildNewAccountRow(email, otpSource, password, oauth))
+      .insert(buildNewAccountRow(email, otpSource, password, oauth, mailBackupId))
       .returning(COLS.ID);
 
     const id =
@@ -356,18 +384,43 @@ const updateAccount = async (req, res) => {
     otp_refresh_token: COLS.OTP_REFRESH_TOKEN,
     otp_client_id: COLS.OTP_CLIENT_ID,
     otp_mail_email: COLS.OTP_MAIL_EMAIL,
+    mail_backup_id: COLS.MAIL_BACKUP_ID,
   };
 
   const updates = {};
   for (const [key, col] of Object.entries(allowedFields)) {
     if (!col || req.body?.[key] === undefined) continue;
-    const val = String(req.body[key] ?? "").trim();
+    const val =
+      key === "password_encrypted"
+        ? String(req.body[key] ?? "")
+        : String(req.body[key] ?? "").trim();
     if (key === "email" && (!val || !EMAIL_OK.test(val))) {
       return res.status(400).json({ error: "Email khong hop le." });
     }
     if (key === "otp_source") {
-      const normalized = normalizeOtpSource(val, { hasMailBackupId: false });
-      updates[col] = normalized === "imap" ? "hdsd" : normalized;
+      const hasMailBackupId =
+        req.body?.mail_backup_id != null && String(req.body.mail_backup_id).trim() !== ""
+          ? true
+          : updates[COLS.MAIL_BACKUP_ID] != null;
+      updates[col] = normalizeAccountOtpSource(val, { hasMailBackupId });
+      continue;
+    }
+    if (key === "mail_backup_id") {
+      if (!COLS.MAIL_BACKUP_ID) continue;
+      if (val === "" || val == null) {
+        updates[col] = null;
+        continue;
+      }
+      const parsedId = Number(val);
+      if (!Number.isFinite(parsedId) || parsedId < 1) {
+        return res.status(400).json({ error: "mail_backup_id khong hop le." });
+      }
+      const row = await mailBackupService.getMailBackupById(parsedId);
+      const MB = mailBackupService.MB_COLS;
+      if (!row || row[MB.IS_ACTIVE] === false) {
+        return res.status(400).json({ error: "Khong tim thay mail IMAP." });
+      }
+      updates[col] = parsedId;
       continue;
     }
     updates[col] = val || null;
@@ -395,8 +448,6 @@ const updateAccount = async (req, res) => {
 };
 
 module.exports = {
-  listMailBackupMailboxes,
-  createMailBackupMailbox,
   listAccounts,
   lookupAccountByEmail,
   createAccount,
