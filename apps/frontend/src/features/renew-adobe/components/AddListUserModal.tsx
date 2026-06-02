@@ -11,6 +11,18 @@ import {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function parseEmailList(raw: string): string[] {
+  const seen = new Set<string>();
+  const emails: string[] = [];
+  for (const part of raw.split(/[\n,;]+/)) {
+    const em = part.trim().toLowerCase();
+    if (!em || seen.has(em)) continue;
+    seen.add(em);
+    emails.push(em);
+  }
+  return emails;
+}
+
 export type AddListUserModalProps = {
   open: boolean;
   onClose: () => void;
@@ -23,7 +35,7 @@ export function AddListUserModal({
   onCreated,
 }: AddListUserModalProps) {
   const [customer, setCustomer] = useState("");
-  const [account, setAccount] = useState("");
+  const [accounts, setAccounts] = useState("");
   const [expired, setExpired] = useState("");
   const [otpSource, setOtpSource] = useState<RenewOtpSource>("hdsd");
   const [otpRefreshToken, setOtpRefreshToken] = useState("");
@@ -36,7 +48,7 @@ export function AddListUserModal({
   useEffect(() => {
     if (!open) return;
     setCustomer("");
-    setAccount("");
+    setAccounts("");
     setExpired("");
     setOtpSource("hdsd");
     setOtpRefreshToken("");
@@ -52,9 +64,19 @@ export function AddListUserModal({
     e.preventDefault();
     if (submittingRef.current || loading) return;
 
-    const em = account.trim().toLowerCase();
-    if (!EMAIL_RE.test(em)) {
-      setError("Nhập email người dùng (Adobe) hợp lệ.");
+    const emails = parseEmailList(accounts);
+    if (emails.length === 0) {
+      setError("Nhập ít nhất một email người dùng (Adobe).");
+      return;
+    }
+
+    const invalid = emails.filter((em) => !EMAIL_RE.test(em));
+    if (invalid.length > 0) {
+      setError(
+        invalid.length === 1
+          ? `Email không hợp lệ: ${invalid[0]}`
+          : `Email không hợp lệ: ${invalid.slice(0, 3).join(", ")}${invalid.length > 3 ? ` (+${invalid.length - 3})` : ""}`,
+      );
       return;
     }
 
@@ -64,18 +86,45 @@ export function AddListUserModal({
       return;
     }
 
+    const sharedPayload = {
+      customer: customer.trim() || null,
+      expired: expired.trim() || null,
+      otp_source: otpSource,
+      ...buildDongvanOtpPayload(otpSource, otpRefreshToken, otpClientId, otpMailEmail),
+    };
+
     setError(null);
     submittingRef.current = true;
     setLoading(true);
     try {
-      await createRenewAdobeListUser({
-        customer: customer.trim() || null,
-        account: em,
-        expired: expired.trim() || null,
-        otp_source: otpSource,
-        ...buildDongvanOtpPayload(otpSource, otpRefreshToken, otpClientId, otpMailEmail),
-      });
+      let inserted = 0;
+      let updated = 0;
+      const failed: string[] = [];
+
+      for (const account of emails) {
+        try {
+          const result = await createRenewAdobeListUser({ ...sharedPayload, account });
+          if (result.updated) updated += 1;
+          else inserted += 1;
+        } catch {
+          failed.push(account);
+        }
+      }
+
+      if (failed.length === emails.length) {
+        setError("Không lưu được email nào vào list_user.");
+        return;
+      }
+
       onCreated();
+
+      if (failed.length > 0) {
+        setError(
+          `Đã lưu ${inserted + updated}/${emails.length} email (${inserted} mới, ${updated} cập nhật). Lỗi: ${failed.join(", ")}`,
+        );
+        return;
+      }
+
       onClose();
     } catch (err) {
       setError((err as Error)?.message ?? "Không lưu được vào list_user.");
@@ -127,32 +176,35 @@ export function AddListUserModal({
 
             <div>
               <label className="mb-1 block text-xs font-medium text-white/60">
-                Email người dùng <span className="text-rose-400">*</span>
-              </label>
-              <input
-                type="email"
-                autoComplete="email"
-                className={inputClass}
-                placeholder="user@domain.com"
-                value={account}
-                onChange={(e) => setAccount(e.target.value)}
-                disabled={loading}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-white/60">
                 Tên khách hàng
               </label>
               <input
                 type="text"
                 className={inputClass}
-                placeholder="Tên hiển thị / công ty"
+                placeholder="Tên hiển thị / công ty (dùng chung cho tất cả email)"
                 value={customer}
                 onChange={(e) => setCustomer(e.target.value)}
                 disabled={loading}
               />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-white/60">
+                Email người dùng <span className="text-rose-400">*</span>
+              </label>
+              <textarea
+                autoComplete="off"
+                className={`${inputClass} min-h-[120px] resize-y font-mono text-[13px] leading-relaxed`}
+                placeholder={"user1@domain.com\nuser2@domain.com\nuser3@domain.com"}
+                value={accounts}
+                onChange={(e) => setAccounts(e.target.value)}
+                disabled={loading}
+                required
+                rows={5}
+              />
+              <p className="mt-1 text-xs text-white/45">
+                Mỗi dòng một email. Có thể phân tách bằng dấu phẩy hoặc chấm phẩy.
+              </p>
             </div>
 
             <div>
@@ -189,7 +241,7 @@ export function AddListUserModal({
                 ))}
               </select>
               <p className="mt-1 text-xs text-white/45">
-                Dùng để lấy mã OTP Adobe qua web cho email người dùng này.
+                Dùng để lấy mã OTP Adobe qua web cho các email trên.
               </p>
             </div>
 
@@ -225,7 +277,7 @@ export function AddListUserModal({
                 disabled={loading}
                 className="rounded-xl bg-emerald-500/25 text-emerald-200 border border-emerald-400/45 px-4 py-2.5 text-sm font-semibold hover:bg-emerald-500/35 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Đang lưu..." : "Lưu"}
+                {loading ? "Đang lưu..." : "Lưu tất cả"}
               </button>
             </div>
           </form>
