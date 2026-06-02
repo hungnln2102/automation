@@ -1,4 +1,5 @@
 const { db } = require("../../db");
+const logger = require("../../utils/logger");
 const {
   SCHEMA_RENEW_ADOBE,
   RENEW_ADOBE_SCHEMA,
@@ -136,6 +137,83 @@ async function upsertRenewAdobeOrderUserTrackingForAccount() {
 }
 
 /**
+ * Sau Adobe Check: thêm user trên team Adobe vào list_user nếu email chưa có.
+ * Email đã tồn tại → bỏ qua (không insert trùng, không cập nhật).
+ */
+async function ensureTeamMembersInListUser(
+  adobeAccountId,
+  manageTeamMembers,
+  adminIdProductFromScrape = null,
+  { adminOrgNameFromScrape = null } = {}
+) {
+  const accountRow = await db(ACC_TABLE).where(ACC_COLS.ID, adobeAccountId).first();
+  const adminOrgName =
+    String(accountRow?.[ACC_COLS.ORG_NAME] ?? adminOrgNameFromScrape ?? "").trim() || null;
+  if (!adminOrgName) {
+    return { inserted: 0, skipped: 0, skippedReason: "missing_admin_org" };
+  }
+
+  const members = Array.isArray(manageTeamMembers) ? manageTeamMembers : [];
+  if (members.length === 0) {
+    return { inserted: 0, skipped: 0, adobeAccountId };
+  }
+
+  const adminProductSet = await resolveAdminProductIdSet(
+    adobeAccountId,
+    adminIdProductFromScrape
+  );
+
+  let inserted = 0;
+  let skipped = 0;
+
+  for (const member of members) {
+    const email = normalizeEmail(member?.email);
+    if (!email) continue;
+
+    const existing = await db(TRACK_TABLE)
+      .whereRaw("LOWER(TRIM(COALESCE(??, ''))) = ?", [TRACK_COLS.ACCOUNT, email])
+      .first();
+    if (existing) {
+      skipped += 1;
+      continue;
+    }
+
+    const { idProduct, status } = resolveTrackingIdProductAndStatus(
+      member,
+      adminProductSet,
+      true
+    );
+
+    const insertRow = {
+      [TRACK_COLS.CUSTOMER]:
+        member?.name != null && String(member.name).trim() !== ""
+          ? String(member.name).trim()
+          : null,
+      [TRACK_COLS.ACCOUNT]: email,
+      [TRACK_COLS.ORG_NAME]: adminOrgName,
+      [TRACK_COLS.EXPIRED]: null,
+      [TRACK_COLS.STATUS]: status,
+      [TRACK_COLS.ID_PRODUCT]: idProduct,
+      ...(TRACK_COLS.OTP_SOURCE ? { [TRACK_COLS.OTP_SOURCE]: "hdsd" } : {}),
+    };
+
+    await db(TRACK_TABLE).insert(insertRow);
+    inserted += 1;
+  }
+
+  if (inserted > 0) {
+    logger.info(
+      "[renew-adobe] list_user: thêm %d user từ Adobe check (admin id=%s, bỏ qua %d đã có)",
+      inserted,
+      adobeAccountId,
+      skipped
+    );
+  }
+
+  return { inserted, skipped, adobeAccountId };
+}
+
+/**
  * Đồng bộ list_user với danh sách team Adobe sau check.
  * Chỉ cập nhật các dòng cùng org với tài khoản admin đang check (tránh org khác bị ghi sai).
  */
@@ -227,6 +305,7 @@ async function getMapAccountIdToUserEmailsFor2330Cleanup() {
 module.exports = {
   upsertRenewAdobeOrderUserTrackingForOrderIds,
   upsertRenewAdobeOrderUserTrackingForAccount,
+  ensureTeamMembersInListUser,
   reconcileOrderUserTrackingWithTeamMembers,
   syncAllRenewAdobeOrderUserTracking,
   getOrderUserTrackingCountsForAdminAccounts,

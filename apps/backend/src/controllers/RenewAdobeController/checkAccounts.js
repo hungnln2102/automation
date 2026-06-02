@@ -10,6 +10,7 @@ const {
 } = require("./usersSnapshotUtils");
 const {
   upsertRenewAdobeOrderUserTrackingForAccount,
+  ensureTeamMembersInListUser,
   reconcileOrderUserTrackingWithTeamMembers,
 } = require("../../services/renew-adobe/orderUserTrackingService");
 const { deleteAdminAccountById } = require("./accountDeletion");
@@ -85,7 +86,19 @@ async function syncMappingAndUpsertTracking(accountId, scrapedData, syncFromTeam
     logger.warn("[renew-adobe] list_user: %s", err.message);
   });
   if (syncFromTeam) {
-    return await reconcileOrderUserTrackingWithTeamMembers(
+    let ensureResult = null;
+    try {
+      ensureResult = await ensureTeamMembersInListUser(
+        accountId,
+        scrapedData?.manageTeamMembers || [],
+        scrapedData?.id_product ?? null,
+        { adminOrgNameFromScrape: scrapedData?.orgName ?? null }
+      );
+    } catch (err) {
+      logger.warn("[renew-adobe] ensure list_user from team: %s", err.message);
+    }
+
+    const reconcileResult = await reconcileOrderUserTrackingWithTeamMembers(
       accountId,
       scrapedData?.manageTeamMembers || [],
       scrapedData?.id_product ?? null
@@ -93,6 +106,15 @@ async function syncMappingAndUpsertTracking(accountId, scrapedData, syncFromTeam
       logger.warn("[renew-adobe] reconcile list_user: %s", err.message);
       return null;
     });
+
+    if (ensureResult || reconcileResult) {
+      return {
+        ...(reconcileResult && typeof reconcileResult === "object" ? reconcileResult : {}),
+        list_user_inserted: ensureResult?.inserted ?? 0,
+        list_user_skipped_existing: ensureResult?.skipped ?? 0,
+      };
+    }
+    return reconcileResult;
   }
   return null;
 }
