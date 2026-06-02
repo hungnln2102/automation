@@ -26,6 +26,7 @@ const {
   memberProductIds,
   resolveTrackingIdProductAndStatus,
 } = require("./orderUserTrackingService");
+const { resolveAdminOtpRuntimeOptions } = require("./adminOtpOptions");
 
 const TRACK_TABLE = tableName(
   RENEW_ADOBE_SCHEMA.ORDER_USER_TRACKING.TABLE,
@@ -257,11 +258,7 @@ async function assignUserToAvailableAccount(userEmail, assignOpts = {}) {
     const accountId = target[COLS.ID];
     const accountEmail = target[COLS.EMAIL];
     const accountPassword = String(target[COLS.PASSWORD_ENC] || "").trim();
-    const mailBackupId = null;
-    const otpSource =
-      COLS.OTP_SOURCE && target[COLS.OTP_SOURCE]
-        ? String(target[COLS.OTP_SOURCE]).trim().toLowerCase()
-        : "imap";
+    const otpOpts = resolveAdminOtpRuntimeOptions(target);
 
     let v2;
     try {
@@ -271,8 +268,7 @@ async function assignUserToAvailableAccount(userEmail, assignOpts = {}) {
         [normalizedEmail],
         {
           savedCookiesFromDb: target[COLS.ALERT_CONFIG] ?? null,
-          mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
-          otpSource,
+          ...otpOpts,
           maxUsers: target.userLimit,
           skipLogin: shouldSkipAdobeLogin(assignOpts),
           idProductFromAccount:
@@ -393,11 +389,7 @@ async function fixUsersOneRoundTightest(userEmailsRaw) {
     const chunk = needAdd.slice(0, take);
     const stillRemaining = needAdd.slice(take);
 
-    const mailBackupId = null;
-    const otpSource =
-      COLS.OTP_SOURCE && target[COLS.OTP_SOURCE]
-        ? String(target[COLS.OTP_SOURCE]).trim().toLowerCase()
-        : "imap";
+    const otpOpts = resolveAdminOtpRuntimeOptions(target);
 
     logger.info(
       "[renew-adobe] fixUsersOneRoundTightest: account=%s slot=%s batch=%s",
@@ -414,8 +406,7 @@ async function fixUsersOneRoundTightest(userEmailsRaw) {
         chunk,
         {
           savedCookiesFromDb: target[COLS.ALERT_CONFIG] ?? null,
-          mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
-          otpSource,
+          ...otpOpts,
           maxUsers: target.userLimit,
           skipLogin: shouldSkipAdobeLogin({}),
           idProductFromAccount:

@@ -26,7 +26,7 @@ const TRACK_TABLE = tableName(
   RENEW_ADOBE_SCHEMA.ORDER_USER_TRACKING.TABLE,
   SCHEMA_RENEW_ADOBE
 );
-const TRACK_COLS = RENEW_ADOBE_SCHEMA.ORDER_USER_TRACKING.COLS;
+const { resolveAdminOtpRuntimeOptions } = require("./adminOtpOptions");
 
 function normalizeEmail(value) {
   return String(value || "")
@@ -70,10 +70,7 @@ async function autoDeleteUsersForAccountId(accountId, userEmails) {
 
   const email = account[COLS.EMAIL];
   const password = String(account[COLS.PASSWORD_ENC] || "").trim();
-  const otpSource =
-    COLS.OTP_SOURCE && account[COLS.OTP_SOURCE]
-      ? String(account[COLS.OTP_SOURCE]).trim().toLowerCase()
-      : "imap";
+  const otpOpts = resolveAdminOtpRuntimeOptions(account);
 
   logger.info("[renew-adobe] Auto-delete users (Adobe + list_user)", {
     accountId,
@@ -82,8 +79,7 @@ async function autoDeleteUsersForAccountId(accountId, userEmails) {
 
   const result = await adobeRenewV2.autoDeleteUsers(email, password, normalized, {
     savedCookiesFromDb: COLS.ALERT_CONFIG ? account[COLS.ALERT_CONFIG] : null,
-    mailBackupId: null,
-    otpSource,
+    ...otpOpts,
   });
 
   if (result.savedCookies && COLS.ALERT_CONFIG) {

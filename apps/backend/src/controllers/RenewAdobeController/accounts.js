@@ -106,6 +106,7 @@ const listAccounts = async (_req, res) => {
         ...(COLS.OTP_SOURCE ? [`${TABLE}.${COLS.OTP_SOURCE}`] : []),
         ...(COLS.OTP_REFRESH_TOKEN ? [`${TABLE}.${COLS.OTP_REFRESH_TOKEN}`] : []),
         ...(COLS.OTP_CLIENT_ID ? [`${TABLE}.${COLS.OTP_CLIENT_ID}`] : []),
+        ...(COLS.OTP_MAIL_EMAIL ? [`${TABLE}.${COLS.OTP_MAIL_EMAIL}`] : []),
         ...(COLS.URL_ACCESS ? [`${TABLE}.${COLS.URL_ACCESS}`] : []),
         ...(COLS.ID_PRODUCT ? [`${TABLE}.${COLS.ID_PRODUCT}`] : []),
         db.raw("NULL::text as alias")

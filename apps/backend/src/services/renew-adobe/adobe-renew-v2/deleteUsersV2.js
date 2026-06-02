@@ -33,6 +33,9 @@ async function deleteUsersV2(email, password, userEmails, options = {}) {
   const savedCookies = options.savedCookies || [];
   const mailBackupId = options.mailBackupId || null;
   const otpSource = options.otpSource || "imap";
+  const otpMailEmail = options.otpMailEmail ?? null;
+  const oauthRefreshToken = options.oauthRefreshToken ?? null;
+  const oauthClientId = options.oauthClientId ?? null;
   const userList = Array.isArray(userEmails) ? userEmails.filter((e) => (e || "").trim()) : [];
 
   if (userList.length === 0) {
@@ -92,6 +95,9 @@ async function deleteUsersV2(email, password, userEmails, options = {}) {
       savedCookies,
       mailBackupId,
       otpSource,
+      otpMailEmail,
+      oauthRefreshToken,
+      oauthClientId,
       sharedSession,
       onlyLogin: true,
     });

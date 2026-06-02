@@ -12,6 +12,7 @@ const {
   reconcileOrderUserTrackingWithTeamMembers,
 } = require("../../services/renew-adobe/orderUserTrackingService");
 const { deleteAdminAccountById } = require("./accountDeletion");
+const { resolveAdminOtpRuntimeOptions } = require("../../services/renew-adobe/adminOtpOptions");
 
 /** Bật xóa toàn team khi cột id_product không còn token chứa CCP (cron check mỗi giờ dùng chung luồng này). */
 function isRenewAdobeDeleteAllWhenNoCcpEnabled() {
@@ -133,11 +134,7 @@ async function runCheckForAccountId(id) {
     throw new Error("Thiếu email hoặc password_enc.");
   }
 
-  const mailBackupId = null;
-  const otpSource =
-    COLS.OTP_SOURCE && account[COLS.OTP_SOURCE]
-      ? String(account[COLS.OTP_SOURCE]).trim().toLowerCase()
-      : "imap";
+  const otpOpts = resolveAdminOtpRuntimeOptions(account);
   logger.info("[renew-adobe] Check account", { id, email });
 
   const existingUrlAccess =
@@ -167,8 +164,7 @@ async function runCheckForAccountId(id) {
 
   const result = await adobeRenewV2.checkAccount(email, password, {
     savedCookiesFromDb: COLS.ALERT_CONFIG ? account[COLS.ALERT_CONFIG] : null,
-    mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
-    otpSource,
+    ...otpOpts,
     existingUrlAccess,
     existingOrgName,
     existingAdobeOrgId,
@@ -228,8 +224,7 @@ async function runCheckForAccountId(id) {
       try {
         const confirmResult = await adobeRenewV2.checkAccount(email, password, {
           savedCookiesFromDb: savedCookiesForDelete,
-          mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
-          otpSource,
+          ...otpOpts,
           existingUrlAccess,
           existingOrgName,
           existingAdobeOrgId,
@@ -287,8 +282,7 @@ async function runCheckForAccountId(id) {
         userEmails,
         {
           savedCookiesFromDb: savedCookiesForDelete,
-          mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
-          otpSource,
+          ...otpOpts,
         }
       );
       const failedDeletes = Array.isArray(deleteResult.failed)
@@ -344,8 +338,7 @@ async function runCheckForAccountId(id) {
           overflowUserEmails,
           {
             savedCookiesFromDb: result.savedCookies || null,
-            mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
-            otpSource,
+            ...otpOpts,
           }
         );
 
@@ -402,8 +395,7 @@ async function runCheckForAccountId(id) {
           teamEmailsNoCcp,
           {
             savedCookiesFromDb: result.savedCookies || null,
-            mailBackupId: Number.isFinite(mailBackupId) ? mailBackupId : null,
-            otpSource,
+            ...otpOpts,
           }
         );
 

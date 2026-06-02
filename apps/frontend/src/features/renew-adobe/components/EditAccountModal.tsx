@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { AdobeAdminAccount } from "../types";
 import { updateAdobeAccount } from "../api/renewAdobeApi";
-import { WEB_OTP_SOURCE_OPTIONS, type RenewOtpSource } from "../otpSource";
+import { WEB_OTP_SOURCE_OPTIONS, isDongvanOtpSource, type RenewOtpSource } from "../otpSource";
 import {
   DongvanOtpFields,
   validateDongvanOtpFields,
 } from "./DongvanOtpFields";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type EditAccountModalProps = {
   account: AdobeAdminAccount;
@@ -36,6 +38,12 @@ export function EditAccountModal({ account, onClose, onSaved }: EditAccountModal
       return;
     }
 
+    const backupMail = otpMailEmail.trim().toLowerCase();
+    if (backupMail && !EMAIL_RE.test(backupMail)) {
+      setError("Mail phụ backup (OTP) không hợp lệ.");
+      return;
+    }
+
     setSaving(true);
     try {
       const payload: Record<string, string> = {};
@@ -49,8 +57,8 @@ export function EditAccountModal({ account, onClose, onSaved }: EditAccountModal
       if ((account.otp_client_id ?? "") !== otpClientId.trim()) {
         payload.otp_client_id = otpClientId.trim();
       }
-      if ((account.otp_mail_email ?? "") !== otpMailEmail.trim()) {
-        payload.otp_mail_email = otpMailEmail.trim();
+      if ((account.otp_mail_email ?? "") !== backupMail) {
+        payload.otp_mail_email = backupMail;
       }
 
       if (Object.keys(payload).length === 0) {
@@ -117,6 +125,23 @@ export function EditAccountModal({ account, onClose, onSaved }: EditAccountModal
               ))}
             </select>
           </div>
+          {!isDongvanOtpSource(otpSource) ? (
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">
+                Mail phụ backup (OTP)
+              </label>
+              <input
+                type="email"
+                value={otpMailEmail}
+                onChange={(e) => setOtpMailEmail(e.target.value)}
+                placeholder="Để trống = dùng email tài khoản admin"
+                className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Nếu điền, hệ thống lấy mã OTP từ mail này thay vì email đăng nhập Adobe.
+              </p>
+            </div>
+          ) : null}
           {otpSource === "dongvan" ? (
             <DongvanOtpFields
               refreshToken={otpRefreshToken}

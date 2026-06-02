@@ -63,6 +63,9 @@ async function addUsersWithProductV2(adminEmail, password, userEmails, options =
   );
   const mailBackupId = options.mailBackupId || null;
   const otpSource = options.otpSource || "imap";
+  const otpMailEmail = options.otpMailEmail ?? null;
+  const oauthRefreshToken = options.oauthRefreshToken ?? null;
+  const oauthClientId = options.oauthClientId ?? null;
   const emails = Array.isArray(userEmails) ? userEmails.map((e) => String(e || "").trim().toLowerCase()).filter(Boolean) : [];
   const maxUsers = Number.parseInt(options.maxUsers, 10);
   if (emails.length === 0) {
@@ -131,6 +134,9 @@ async function addUsersWithProductV2(adminEmail, password, userEmails, options =
         savedCookies,
         mailBackupId,
         otpSource,
+        otpMailEmail,
+        oauthRefreshToken,
+        oauthClientId,
         sharedSession,
         onlyLogin: true,
       });

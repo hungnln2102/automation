@@ -81,6 +81,9 @@ async function checkAccount(email, password, options = {}) {
   const cookiesToUse = savedCookiesFromDb?.cookies || [];
   const mailBackupId = options.mailBackupId || null;
   const otpSource = options.otpSource || "imap";
+  const otpMailEmail = options.otpMailEmail ?? null;
+  const oauthRefreshToken = options.oauthRefreshToken ?? null;
+  const oauthClientId = options.oauthClientId ?? null;
   const existingOrgName =
     options.existingOrgName && String(options.existingOrgName).trim()
       ? String(options.existingOrgName).trim()
@@ -168,6 +171,9 @@ async function checkAccount(email, password, options = {}) {
       savedCookies: cookiesToUse,
       mailBackupId,
       otpSource,
+      otpMailEmail,
+      oauthRefreshToken,
+      oauthClientId,
       sharedSession,
       existingOrgName,
       existingAdobeOrgId,
@@ -363,6 +369,9 @@ async function removeUserFromAccount(email, password, userEmail, options = {}) {
     savedCookies,
     mailBackupId: options.mailBackupId || null,
     otpSource: options.otpSource || "imap",
+    otpMailEmail: options.otpMailEmail ?? null,
+    oauthRefreshToken: options.oauthRefreshToken ?? null,
+    oauthClientId: options.oauthClientId ?? null,
   });
   return {
     success: (v2.deleted || []).includes(userEmail),
@@ -392,6 +401,9 @@ async function autoDeleteUsers(email, password, userEmails, options = {}) {
     savedCookies,
     mailBackupId: options.mailBackupId || null,
     otpSource: options.otpSource || "imap",
+    otpMailEmail: options.otpMailEmail ?? null,
+    oauthRefreshToken: options.oauthRefreshToken ?? null,
+    oauthClientId: options.oauthClientId ?? null,
   });
   return {
     deleted: v2.deleted || [],

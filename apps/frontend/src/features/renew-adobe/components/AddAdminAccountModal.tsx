@@ -5,7 +5,7 @@ import {
   createAdobeAdminAccount,
   createAdobeAdminAccountsBulk,
 } from "../api/renewAdobeApi";
-import { WEB_OTP_SOURCE_OPTIONS, type RenewOtpSource } from "../otpSource";
+import { WEB_OTP_SOURCE_OPTIONS, isDongvanOtpSource, type RenewOtpSource } from "../otpSource";
 import {
   buildDongvanOtpPayload,
   DongvanOtpFields,
@@ -86,12 +86,22 @@ export function AddAdminAccountModal({
       return;
     }
 
+    const backupMail = otpMailEmail.trim().toLowerCase();
+    if (backupMail && !EMAIL_RE.test(backupMail)) {
+      setError("Mail phụ backup (OTP) không hợp lệ.");
+      return;
+    }
+
     const dongvanPayload = buildDongvanOtpPayload(
       otpSource,
       otpRefreshToken,
       otpClientId,
       otpMailEmail,
     );
+    const backupMailPayload =
+      !isDongvanOtpSource(otpSource) && backupMail
+        ? { otp_mail_email: backupMail }
+        : {};
 
     if (mode === "single") {
       const em = email.trim().toLowerCase();
@@ -107,6 +117,7 @@ export function AddAdminAccountModal({
           password: pw,
           otp_source: otpSource,
           ...dongvanPayload,
+          ...backupMailPayload,
         });
         onCreated();
         onClose();
@@ -136,6 +147,7 @@ export function AddAdminAccountModal({
         password: pw,
         otp_source: otpSource,
         ...dongvanPayload,
+        ...backupMailPayload,
       });
       if (result.created.length === 0) {
         setError(
@@ -300,6 +312,29 @@ export function AddAdminAccountModal({
                 ))}
               </select>
             </div>
+
+            {!isDongvanOtpSource(otpSource) ? (
+              <div className="space-y-1">
+                <label
+                  htmlFor="add-admin-otp-backup-mail"
+                  className="text-xs font-medium text-white/60"
+                >
+                  Mail phụ backup (OTP)
+                </label>
+                <input
+                  id="add-admin-otp-backup-mail"
+                  type="email"
+                  className={inputClass}
+                  placeholder="Để trống = dùng email tài khoản admin"
+                  value={otpMailEmail}
+                  onChange={(ev) => setOtpMailEmail(ev.target.value)}
+                  disabled={loading}
+                />
+                <p className="text-xs text-white/45">
+                  Nếu điền, hệ thống lấy mã OTP từ mail này thay vì email đăng nhập Adobe.
+                </p>
+              </div>
+            ) : null}
 
             {otpSource === "dongvan" ? (
               <DongvanOtpFields

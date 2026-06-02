@@ -70,10 +70,11 @@ async function handleOtpChallenge(page, otpOptions = {}, { stage = "unknown" } =
     hasMailBackupId: Number.isFinite(Number(otpOptions.mailBackupId)),
   });
   logger.info(
-    "[adobe-v2] OTP stage=%s: source=%s account=%s",
+    "[adobe-v2] OTP stage=%s: source=%s account=%s otpMail=%s",
     stage,
     normalizedSource,
-    String(otpOptions.accountEmail || "").slice(0, 80)
+    String(otpOptions.accountEmail || "").slice(0, 80),
+    String(otpOptions.otpMailEmail || otpOptions.accountEmail || "").slice(0, 80)
   );
 
   const maxAttempts = Math.max(
@@ -93,6 +94,9 @@ async function handleOtpChallenge(page, otpOptions = {}, { stage = "unknown" } =
       accountEmail: otpOptions.accountEmail,
       senderFilter: "adobe",
       minTimestampMs: challengeStartedAt - 15000,
+      oauthRefreshToken: otpOptions.oauthRefreshToken,
+      oauthClientId: otpOptions.oauthClientId,
+      oauthMailEmail: otpOptions.otpMailEmail,
     });
 
     if (!code) continue;

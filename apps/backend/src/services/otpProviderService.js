@@ -1,4 +1,5 @@
 const logger = require("../utils/logger");
+const { resolveOtpFetchEmail } = require("../renew-adobe/adminOtpOptions");
 const mailOtpService = require("./mailOtpService");
 const { readOtpFromTinyHost } = require("./tinyhost");
 const { fetchOtpFromDongvanApi } = require("./dongvan/dongvanOtpService");
@@ -175,10 +176,12 @@ async function fetchOtpBySource({
     hasMailBackupId: Number.isFinite(Number(mailBackupId)),
   });
 
+  const otpEmail = resolveOtpFetchEmail(accountEmail, oauthMailEmail);
+
   if (normalizedSource === OTP_SOURCES.DONGVAN) {
-    if (!accountEmail) return null;
+    if (!otpEmail) return null;
     return fetchOtpFromDongvanApi({
-      accountEmail,
+      accountEmail: otpEmail,
       refreshToken: oauthRefreshToken,
       clientId: oauthClientId,
       mailEmail: oauthMailEmail,
@@ -190,8 +193,8 @@ async function fetchOtpBySource({
   }
 
   if (normalizedSource === OTP_SOURCES.TINYHOST) {
-    if (!accountEmail) return null;
-    const result = await readOtpFromTinyHost(accountEmail, {
+    if (!otpEmail) return null;
+    const result = await readOtpFromTinyHost(otpEmail, {
       senderFilter,
       timeoutMs: 10000,
       autoDelete: true,
@@ -201,7 +204,7 @@ async function fetchOtpBySource({
 
   if (normalizedSource === OTP_SOURCES.HDSD) {
     return fetchOtpFromHdsdApi({
-      accountEmail,
+      accountEmail: otpEmail,
       senderFilter,
       timeoutMs: 10000,
       minTimestampMs,

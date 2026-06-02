@@ -104,6 +104,9 @@ async function runCheckFlow(email, password, options = {}) {
     savedCookies = [],
     mailBackupId = null,
     otpSource = "imap",
+    otpMailEmail = null,
+    oauthRefreshToken = null,
+    oauthClientId = null,
     sharedSession = null,
     existingOrgName = null,
     existingAdobeOrgId = null,
@@ -256,6 +259,9 @@ async function runCheckFlow(email, password, options = {}) {
         password,
         mailBackupId,
         otpSource,
+        otpMailEmail,
+        oauthRefreshToken,
+        oauthClientId,
       });
       const resolvedOrgName =
         existingOrgName || loginMeta?.selectedOrgName || null;
@@ -321,6 +327,9 @@ async function runCheckFlow(email, password, options = {}) {
       password,
       mailBackupId,
       otpSource,
+      otpMailEmail,
+      oauthRefreshToken,
+      oauthClientId,
     });
     const resolvedOrgName =
       existingOrgName || loginMeta?.selectedOrgName || null;

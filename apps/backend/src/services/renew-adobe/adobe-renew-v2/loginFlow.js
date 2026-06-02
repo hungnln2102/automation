@@ -308,8 +308,23 @@ async function doFormLoginOnAuthPage(page, email, password, otpOptions = {}) {
  * @param {{ email: string, password: string, mailBackupId?: number, otpSource?: string }} opts
  */
 async function runLoginFlow(page, opts) {
-  const { email, password, mailBackupId = null, otpSource = "imap" } = opts;
-  const otpOptions = { mailBackupId, otpSource, accountEmail: email };
+  const {
+    email,
+    password,
+    mailBackupId = null,
+    otpSource = "imap",
+    otpMailEmail = null,
+    oauthRefreshToken = null,
+    oauthClientId = null,
+  } = opts;
+  const otpOptions = {
+    mailBackupId,
+    otpSource,
+    accountEmail: email,
+    otpMailEmail,
+    oauthRefreshToken,
+    oauthClientId,
+  };
 
   // Nếu đã ở trang auth (fallback từ B1 khi adobe.com lỗi HTTP2), login trực tiếp không cần click Sign in.
   const currentUrl = page.url() || "";
