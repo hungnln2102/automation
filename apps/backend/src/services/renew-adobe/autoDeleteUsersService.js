@@ -26,6 +26,7 @@ const TRACK_TABLE = tableName(
   RENEW_ADOBE_SCHEMA.ORDER_USER_TRACKING.TABLE,
   SCHEMA_RENEW_ADOBE
 );
+const TRACK_COLS = RENEW_ADOBE_SCHEMA.ORDER_USER_TRACKING.COLS;
 const { resolveAdminOtpRuntimeOptions } = require("./adminOtpOptions");
 
 function normalizeEmail(value) {
