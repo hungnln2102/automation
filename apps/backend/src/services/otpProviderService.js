@@ -1,5 +1,5 @@
 const logger = require("../utils/logger");
-const { resolveOtpFetchEmail } = require("../renew-adobe/adminOtpOptions");
+const { resolveOtpFetchEmail } = require("./renew-adobe/adminOtpOptions");
 const mailOtpService = require("./mailOtpService");
 const { readOtpFromTinyHost } = require("./tinyhost");
 const { fetchOtpFromDongvanApi } = require("./dongvan/dongvanOtpService");
