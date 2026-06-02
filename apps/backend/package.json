@@ -15,6 +15,7 @@
     "start:api": "node src/server.js",
     "start:scheduler": "node scheduler.js",
     "start:scheduler:adobe-once": "node scheduler.js --run-adobe-once",
+    "start:scheduler:expired-cleanup-once": "node scheduler.js --run-expired-cleanup-once",
     "dev": "nodemon src/server.js",
     "dev:api": "nodemon src/server.js",
     "env:renew-adobe": "node scripts/append-renew-adobe-env.js",

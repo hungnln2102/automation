@@ -17,7 +17,7 @@ describe("app CORS", () => {
 
   it("allows configured production website origin", async () => {
     process.env.FRONTEND_ORIGINS =
-      "http://localhost:5173,https://admin.mavrykpremium.store,https://www.mavrykpremium.store";
+      "http://localhost:5173,https://admin.otp90.com,https://otp90.com";
 
     jest.doMock("../../src/routes", () => {
       const express = require("express");
@@ -27,11 +27,11 @@ describe("app CORS", () => {
     const app = require("../../src/app");
     const response = await request(app)
       .get("/api")
-      .set("Origin", "https://www.mavrykpremium.store");
+      .set("Origin", "https://otp90.com");
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["access-control-allow-origin"]).toBe(
-      "https://www.mavrykpremium.store"
+      "https://otp90.com"
     );
   });
 });

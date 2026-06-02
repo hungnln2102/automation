@@ -7,8 +7,8 @@
  * Usage:
  *   node scheduler.js
  *   npm run start:scheduler
- *   node scheduler.js --run-adobe-once   # chạy một lần job check Adobe giống cron (không đăng ký cron khác)
- *   npm run start:scheduler:adobe-once
+ *   node scheduler.js --run-expired-cleanup-once   # xóa user list_user hết hạn (một lần)
+ *   npm run start:scheduler:expired-cleanup-once
  */
 // Cùng .env + .env.local với API — không phụ thuộc cwd khi systemd/docker đổi thư mục làm việc.
 const { loadBackendEnv } = require("./src/config/loadEnv");
@@ -49,6 +49,23 @@ if (process.argv.includes("--run-adobe-once")) {
     })
     .catch((err) => {
       logger.error("[Scheduler] CLI --run-adobe-once thất bại", {
+        error: err.message,
+        stack: err.stack,
+      });
+      process.exit(1);
+    });
+} else if (process.argv.includes("--run-expired-cleanup-once")) {
+  const { cleanupExpiredListUsersTask } = require("./src/scheduler/taskInstances");
+  logger.info(
+    "[Scheduler] CLI --run-expired-cleanup-once: xóa user list_user hết hạn (cùng logic cron 00:01)"
+  );
+  cleanupExpiredListUsersTask("manual")
+    .then(() => {
+      logger.info("[Scheduler] CLI --run-expired-cleanup-once hoàn thành.");
+      process.exit(0);
+    })
+    .catch((err) => {
+      logger.error("[Scheduler] CLI --run-expired-cleanup-once thất bại", {
         error: err.message,
         stack: err.stack,
       });

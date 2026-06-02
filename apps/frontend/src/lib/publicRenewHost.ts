@@ -1,6 +1,6 @@
 /**
  * Domain phục vụ form Renew công khai (không qua đăng nhập admin).
- * Mặc định otp90.com + www; thêm qua VITE_PUBLIC_RENEW_EXTRA_HOSTS=a.com,b.test
+ * Mặc định otp90.com; thêm qua VITE_PUBLIC_RENEW_EXTRA_HOSTS=www.otp90.com,a.com
  */
 export function getPublicRenewHostnames(): string[] {
   const extra = String(
@@ -12,7 +12,7 @@ export function getPublicRenewHostnames(): string[] {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 
-  const defaults = ["otp90.com", "www.otp90.com"];
+  const defaults = ["otp90.com"];
   return [...new Set([...defaults, ...extra])];
 }
 

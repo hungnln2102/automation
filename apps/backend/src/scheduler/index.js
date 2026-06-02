@@ -3,6 +3,7 @@ const logger = require("../utils/logger");
 const {
   renewAdobeCheckAndNotifyTask,
   cleanupAdobeProfileGarbageTask,
+  cleanupExpiredListUsersTask,
   getSchedulerStatus,
   schedulerTimezone,
 } = require("./taskInstances");
@@ -23,9 +24,23 @@ const runCleanupAdobeProfileGarbageSafe = (source) =>
     })
   );
 
+const runCleanupExpiredListUsersSafe = (source) =>
+  cleanupExpiredListUsersTask(source).catch((err) =>
+    logger.error(`[CRON] Cleanup expired list_user failed during ${source}`, {
+      error: err.message,
+      stack: err.stack,
+    })
+  );
+
 if (require.main === module && process.argv.includes("--run-once")) {
   runRenewAdobeCheckSafe("manual");
 }
+
+cron.schedule(
+  "1 0 * * *",
+  () => runCleanupExpiredListUsersSafe("cron"),
+  { scheduled: true, timezone: schedulerTimezone }
+);
 
 cron.schedule(
   "0 0 * * *",
@@ -40,6 +55,7 @@ cron.schedule(
 );
 
 logger.info("[Scheduler] Đã khởi động scheduler Renew Adobe", {
+  expiredListUserCron: "1 0 * * *",
   renewAdobeCron: "0 * * * *",
   cleanupProfileCron: "0 0 * * *",
   schedulerTimezone,
@@ -48,5 +64,6 @@ logger.info("[Scheduler] Đã khởi động scheduler Renew Adobe", {
 module.exports = {
   renewAdobeCheckAndNotifyTask,
   cleanupAdobeProfileGarbageTask,
+  cleanupExpiredListUsersTask,
   getSchedulerStatus,
 };

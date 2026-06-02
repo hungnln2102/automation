@@ -26,40 +26,38 @@ describe("appConfig CORS origins", () => {
   it("normalizes configured origins and removes duplicates", () => {
     process.env.NODE_ENV = "production";
     process.env.FRONTEND_ORIGINS = [
-      "https://admin.mavrykpremium.store/",
-      " https://www.mavrykpremium.store ",
-      "https://www.mavrykpremium.store/",
-      "https://mavrykpremium.store/path",
+      "https://admin.otp90.com/",
+      " https://otp90.com ",
+      "https://otp90.com/",
+      "https://otp90.com/path",
     ].join(",");
 
     const { allowedOrigins, normalizeOrigin } = require("../../../src/config/appConfig");
 
     expect(allowedOrigins.sort()).toEqual(
       [
-        "http://admin.mavrykpremium.store",
-        "http://www.mavrykpremium.store",
-        "http://mavrykpremium.store",
-        "https://admin.mavrykpremium.store",
-        "https://www.mavrykpremium.store",
-        "https://mavrykpremium.store",
+        "http://admin.otp90.com",
+        "http://otp90.com",
+        "https://admin.otp90.com",
+        "https://otp90.com",
       ].sort(),
     );
-    expect(normalizeOrigin("https://www.mavrykpremium.store/")).toBe(
-      "https://www.mavrykpremium.store"
+    expect(normalizeOrigin("https://otp90.com/")).toBe(
+      "https://otp90.com"
     );
   });
 
   it("in non-production, unions local storefront/admin dev origins for FRONTEND_ORIGINS", () => {
     jest.resetModules();
     process.env.NODE_ENV = "test";
-    process.env.FRONTEND_ORIGINS = "https://admin.example.test";
+    process.env.FRONTEND_ORIGINS = "https://admin.otp90.com";
 
     const { allowedOrigins } = require("../../../src/config/appConfig");
 
     expect(allowedOrigins).toEqual(
       expect.arrayContaining([
-        "https://admin.example.test",
-        "http://admin.example.test",
+        "https://admin.otp90.com",
+        "http://admin.otp90.com",
         "http://localhost:4001",
         "http://127.0.0.1:4001",
       ]),
