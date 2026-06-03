@@ -4,7 +4,7 @@
  */
 
 const logger = require("../../../utils/logger");
-const { getPlaywrightProxyOptions } = require("./shared/proxyConfig");
+const { getPlaywrightProxyOptions, getChromiumLaunchArgs } = require("./shared/proxyConfig");
 const { FLOW_ERROR_CODES } = require("./shared/errorCodes");
 const { runLoginFlow } = require("./loginFlow");
 const { runB10ToB13 } = require("./checkInfoFlow");
@@ -115,6 +115,8 @@ async function runCheckFlow(email, password, options = {}) {
     stopAfterProductsWhenNoCcp = false,
     onlyLogin = false,
     pinnedCcpProductIds = [],
+    proxyOptions: proxyOptionsFromCaller = null,
+    proxyId = null,
   } = options;
   let ownedContext = null;
   let context;
@@ -126,8 +128,14 @@ async function runCheckFlow(email, password, options = {}) {
     logger.info("[adobe-v2] B14: Dùng shared session (không đóng browser)");
   } else {
     const headless = process.env.PLAYWRIGHT_HEADLESS !== "false";
-    const proxyOptions = getPlaywrightProxyOptions();
-    if (proxyOptions) logger.info("[adobe-v2] Proxy: %s", proxyOptions.server);
+    const proxyOptions = proxyOptionsFromCaller ?? getPlaywrightProxyOptions();
+    if (proxyOptions) {
+      logger.info(
+        "[adobe-v2] Proxy: %s (proxyId=%s)",
+        proxyOptions.server,
+        proxyId ?? "—"
+      );
+    }
 
     const skipPersistentProfile =
       String(process.env.ADOBE_V2_SKIP_PERSISTENT_PROFILE || "").trim() === "1";
@@ -137,13 +145,7 @@ async function runCheckFlow(email, password, options = {}) {
       const launchOptions = {
         headless,
         slowMo: headless ? 0 : 80,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-          "--disable-quic",
-        ],
+        args: getChromiumLaunchArgs({ useProxy: Boolean(proxyOptions) }),
       };
       if (proxyOptions) launchOptions.proxy = proxyOptions;
       const browser = await chromium.launch(launchOptions);

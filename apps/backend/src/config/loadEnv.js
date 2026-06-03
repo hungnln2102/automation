@@ -40,7 +40,13 @@ function loadBackendEnv() {
     return;
   }
 
-  configEnvFile(FILE_SHARED);
+  const isTest = process.env.NODE_ENV === "test";
+
+  configEnvFile(FILE_SHARED, { override: !isTest });
+
+  if (isTest) {
+    return;
+  }
 
   if (isProductionLike()) {
     configEnvFile(FILE_DOCKER, { override: false });

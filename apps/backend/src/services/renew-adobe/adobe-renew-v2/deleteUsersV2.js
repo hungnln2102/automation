@@ -6,7 +6,8 @@
 const { chromium } = require("playwright");
 const logger = require("../../../utils/logger");
 const { runCheckFlow } = require("./runCheckFlow");
-const { getPlaywrightProxyOptions } = require("./shared/proxyConfig");
+const { getPlaywrightProxyOptions, getChromiumLaunchArgs } = require("./shared/proxyConfig");
+const { resolveAdminProxyRuntimeOptionsByEmail } = require("../adminProxyOptions");
 const {
   launchSessionFromProfile,
   hasExistingProfileForEmail,
@@ -43,11 +44,19 @@ async function deleteUsersV2(email, password, userEmails, options = {}) {
   }
 
   const headless = process.env.PLAYWRIGHT_HEADLESS !== "false";
-  const proxyOptions = getPlaywrightProxyOptions();
+  const proxyResolved = await resolveAdminProxyRuntimeOptionsByEmail(email);
+  const proxyOptions = proxyResolved.playwright ?? getPlaywrightProxyOptions();
+  if (proxyOptions) {
+    logger.info(
+      "[adobe-v2] deleteUsersV2: proxy=%s source=%s",
+      proxyOptions.server,
+      proxyResolved.source
+    );
+  }
   const launchOptions = {
     headless,
     slowMo: headless ? 0 : 80,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+    args: getChromiumLaunchArgs({ useProxy: Boolean(proxyOptions) }),
   };
   if (proxyOptions) launchOptions.proxy = proxyOptions;
 

@@ -14,6 +14,13 @@ const {
   testMailBackupMailbox,
 } = require("./mailBackup");
 const {
+  listProxyPool,
+  createProxyPoolItem,
+  updateProxyPoolItem,
+  deleteProxyPoolItem,
+  testProxyPoolItem,
+} = require("./proxyPool");
+const {
   runCheckForAccountId,
   runCheck,
   runCheckWithCookies,
@@ -54,4 +61,9 @@ module.exports = {
   updateMailBackupMailbox,
   deleteMailBackupMailbox,
   testMailBackupMailbox,
+  listProxyPool,
+  createProxyPoolItem,
+  updateProxyPoolItem,
+  deleteProxyPoolItem,
+  testProxyPoolItem,
 };

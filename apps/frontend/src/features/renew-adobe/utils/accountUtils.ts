@@ -22,6 +22,7 @@ export function normalizeAdobeAdminAccount(
   row: Record<string, unknown>
 ): AdobeAdminAccount {
   const licenseStatus = normalizeIncomingLicenseStatus(row.license_status);
+  const userCount = Number(row.user_count);
 
   const aliasRaw = row.alias;
   const rawOtpSource = String(row.otp_source ?? "imap").trim().toLowerCase();
@@ -44,7 +45,7 @@ export function normalizeAdobeAdminAccount(
         ? String(aliasRaw).trim()
         : null,
     org_name: row.org_name != null ? String(row.org_name) : null,
-    user_count: Number(row.user_count) ?? 0,
+    user_count: Number.isFinite(userCount) ? userCount : 0,
     slot_used_count:
       row.slot_used_count != null && Number.isFinite(Number(row.slot_used_count))
         ? Number(row.slot_used_count)

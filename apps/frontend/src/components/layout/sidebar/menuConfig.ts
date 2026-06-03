@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from "react";
 import {
   ArrowPathIcon,
   EnvelopeIcon,
+  GlobeAltIcon,
   MagnifyingGlassIcon,
   RectangleStackIcon,
   UserGroupIcon,
@@ -58,6 +59,11 @@ export const menuSections: MenuSection[] = [
         name: "Mail Backup (IMAP)",
         href: "/mail-backup",
         icon: EnvelopeIcon,
+      },
+      {
+        name: "Proxy (Adobe login)",
+        href: "/proxy-pool",
+        icon: GlobeAltIcon,
       },
     ],
   },

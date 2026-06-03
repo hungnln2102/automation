@@ -20,9 +20,20 @@ const {
   updateMailBackupMailbox,
   deleteMailBackupMailbox,
   testMailBackupMailbox,
+  listProxyPool,
+  createProxyPoolItem,
+  updateProxyPoolItem,
+  deleteProxyPoolItem,
+  testProxyPoolItem,
 } = require("../controllers/RenewAdobeController");
 
 const router = express.Router();
+
+router.get("/proxy-pool", listProxyPool);
+router.post("/proxy-pool", createProxyPoolItem);
+router.get("/proxy-pool/:id/test", testProxyPoolItem);
+router.patch("/proxy-pool/:id", updateProxyPoolItem);
+router.delete("/proxy-pool/:id", deleteProxyPoolItem);
 
 router.get("/mail-backup", listMailBackupMailboxes);
 router.post("/mail-backup", createMailBackupMailbox);

@@ -23,6 +23,11 @@ const searchPath = Array.from(
   new Set([SCHEMA_ADMIN, SCHEMA_RENEW_ADOBE].filter(Boolean))
 );
 const KNEX_POOL_MAX = Number(process.env.DB_KNEX_POOL_MAX) || 10;
+const shouldCheckKnexOnBoot =
+  process.env.NODE_ENV !== "test" &&
+  !["1", "true", "yes"].includes(
+    String(process.env.DISABLE_DB_BOOT_CHECK || "").trim().toLowerCase()
+  );
 
 const db = knex({
   client: "pg",
@@ -35,11 +40,19 @@ const db = knex({
   searchPath,
 });
 
-db.raw("SELECT 1")
-  .then(() => console.log(`✅ Knex pool sẵn sàng (max=${KNEX_POOL_MAX})`))
-  .catch((err) => {
+const verifyKnexConnection = async () => {
+  try {
+    await db.raw("SELECT 1");
+    console.log(`✅ Knex pool sẵn sàng (max=${KNEX_POOL_MAX})`);
+  } catch (err) {
     console.error("❌ Knex kết nối thất bại:", err.message);
     if (process.env.NODE_ENV === "production") process.exit(1);
-  });
+  }
+};
+
+if (shouldCheckKnexOnBoot) {
+  verifyKnexConnection();
+}
 
 module.exports = db;
+module.exports.verifyKnexConnection = verifyKnexConnection;

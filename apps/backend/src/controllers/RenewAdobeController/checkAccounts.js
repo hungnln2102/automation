@@ -15,6 +15,10 @@ const {
 } = require("../../services/renew-adobe/orderUserTrackingService");
 const { deleteAdminAccountById } = require("./accountDeletion");
 const { resolveAdminOtpRuntimeOptions } = require("../../services/renew-adobe/adminOtpOptions");
+const {
+  resolveAdminProxyRuntimeOptions,
+  markProxyDeadIfNetworkError,
+} = require("../../services/renew-adobe/adminProxyOptions");
 
 /** Bật xóa toàn team khi cột id_product không còn token chứa CCP (cron check mỗi giờ dùng chung luồng này). */
 function isRenewAdobeDeleteAllWhenNoCcpEnabled() {
@@ -185,6 +189,14 @@ async function runCheckForAccountId(id) {
       : null;
   const firstAccountCheck = isFirstAccountCheck(account);
 
+  const proxyResolved = await resolveAdminProxyRuntimeOptions(account);
+  logger.info("[renew-adobe] Check proxy", {
+    id,
+    source: proxyResolved.source,
+    proxyId: proxyResolved.proxyId,
+    server: proxyResolved.playwright?.server ?? null,
+  });
+
   const result = await adobeRenewV2.checkAccount(email, password, {
     savedCookiesFromDb: COLS.ALERT_CONFIG ? account[COLS.ALERT_CONFIG] : null,
     ...otpOpts,
@@ -194,9 +206,17 @@ async function runCheckForAccountId(id) {
     cachedContractActiveLicenseCount,
     forceProductCheck: true,
     stopAfterProductsWhenNoCcp: firstAccountCheck,
+    proxyOptions: proxyResolved.playwright,
+    proxyId: proxyResolved.proxyId,
+    proxySource: proxyResolved.source,
   });
 
   if (!result.success) {
+    if (proxyResolved.proxyId) {
+      await markProxyDeadIfNetworkError(proxyResolved.proxyId, result.error).catch(
+        () => {}
+      );
+    }
     if (result._stack) {
       logger.error(
         "[renew-adobe] checkAccount thất bại với stack:\n%s",

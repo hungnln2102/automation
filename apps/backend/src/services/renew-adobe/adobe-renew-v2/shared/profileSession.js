@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
 const logger = require("../../../../utils/logger");
+const { getChromiumLaunchArgs } = require("./proxyConfig");
 
 function sanitizeEmailForPath(email) {
   return String(email || "unknown")
@@ -56,13 +57,7 @@ async function launchSessionFromProfile({
   const launchOptions = {
     headless,
     slowMo: headless ? 0 : 80,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-quic",
-    ],
+    args: getChromiumLaunchArgs({ useProxy: Boolean(proxyOptions) }),
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     viewport: { width: 1280, height: 720 },

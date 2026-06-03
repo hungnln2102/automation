@@ -9,6 +9,7 @@ const PageLoader = () => (
 
 const RenewAdobeAdminPage = lazy(() => import("@/features/renew-adobe/pages/RenewAdobeAdminPage"));
 const MailBackupPage = lazy(() => import("@/features/renew-adobe/pages/MailBackupPage"));
+const ProxyPoolPage = lazy(() => import("@/features/renew-adobe/pages/ProxyPoolPage"));
 const RenewOrdersDeskPage = lazy(() => import("@/features/renew-adobe/desk/RenewOrdersDeskPage"));
 const RenewAdobePublicCheckPage = lazy(
   () => import("@/features/renew-adobe/storefront-check/RenewAdobePublicCheckPage"),
@@ -22,6 +23,7 @@ export function AppRoutes() {
         <Route path="/dashboard" element={<Navigate to="/renew-adobe-admin" replace />} />
         <Route path="/renew-adobe-admin" element={<RenewAdobeAdminPage />} />
         <Route path="/mail-backup" element={<MailBackupPage />} />
+        <Route path="/proxy-pool" element={<ProxyPoolPage />} />
         <Route path="/renew-adobe-check" element={<RenewAdobePublicCheckPage />} />
         <Route path="/renew-orders" element={<RenewOrdersDeskPage />} />
         <Route path="*" element={<Navigate to="/renew-adobe-admin" replace />} />

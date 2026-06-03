@@ -15,6 +15,7 @@ const RENEW_ADOBE_SCHEMA = {
       OTP_CLIENT_ID: "otp_client_id",
       OTP_MAIL_EMAIL: "otp_mail_email",
       MAIL_BACKUP_ID: "mail_backup_id",
+      PROXY_ID: "proxy_id",
       LAST_CHECKED: "last_checked_at",
       IS_ACTIVE: "is_active",
       CREATED_AT: "created_at",

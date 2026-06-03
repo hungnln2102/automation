@@ -15,4 +15,5 @@ const withTransaction = async (handler) => {
 module.exports = {
   db,
   withTransaction,
+  verifyKnexConnection: db.verifyKnexConnection,
 };

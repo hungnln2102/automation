@@ -13,46 +13,13 @@ const RAW_API_BASE: string = (() => {
       : "";
   if (metaBase) return metaBase;
 
-  // Build production: để trống → `/api/...` cùng origin (Nginx path proxy).
   return "";
 })();
 
-/** Hostname trình duyệt đang là máy dev (IPv4/IPv6 loopback). */
 function isBrowserLocalHostname(hostname: string): boolean {
-  const h = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const h = hostname.replace(/^[|]$/g, "").toLowerCase();
   return h === "localhost" || h === "127.0.0.1" || h === "::1";
 }
-
-/**
- * Base API có phải loopback / dev-only không (kể cả `::1`, `:3001`, `localhost:6000`).
- * Tránh bundle prod còn sót URL máy dev hoặc IPv6 không khớp regex cũ.
- */
-function isLoopbackDevApiBase(value: string): boolean {
-  const normalized = normalizeBaseUrl((value || "").trim());
-  if (!normalized) return false;
-  try {
-    const u = new URL(normalized);
-    const h = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
-    return (
-      h === "localhost" ||
-      h === "127.0.0.1" ||
-      h === "::1" ||
-      h === "0.0.0.0"
-    );
-  } catch {
-    return /localhost|127\.0\.0\.1/i.test(normalized);
-  }
-}
-
-/** Build-time: không cho bundle production “dính” máy dev nếu .env sai. */
-function sanitizeProductionRaw(raw: string): string {
-  if (!isProdBundle) return raw;
-  const t = raw.trim();
-  if (t && isLoopbackDevApiBase(t)) return "";
-  return t;
-}
-
-const RAW_API_AFTER_SANITIZE = sanitizeProductionRaw(RAW_API_BASE);
 
 function normalizeBaseUrl(value: string): string {
   const normalized = (value || "").trim();
@@ -63,9 +30,28 @@ function normalizeBaseUrl(value: string): string {
   return normalized;
 }
 
+function isLoopbackDevApiBase(value: string): boolean {
+  const normalized = normalizeBaseUrl((value || "").trim());
+  if (!normalized) return false;
+  try {
+    const u = new URL(normalized);
+    const h = u.hostname.replace(/^[|]$/g, "").toLowerCase();
+    return h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "0.0.0.0";
+  } catch {
+    return /localhost|127\.0\.0\.1/i.test(normalized);
+  }
+}
+
+function sanitizeProductionRaw(raw: string): string {
+  if (!isProdBundle) return raw;
+  const t = raw.trim();
+  if (t && isLoopbackDevApiBase(t)) return "";
+  return t;
+}
+
+const RAW_API_AFTER_SANITIZE = sanitizeProductionRaw(RAW_API_BASE);
 export const API_BASE_URL: string = normalizeBaseUrl(RAW_API_AFTER_SANITIZE);
 
-/** Base có hiệu lực trên browser: không bao giờ gọi loopback khi đang vào domain thật. */
 function effectiveApiBase(): string {
   const base = API_BASE_URL;
   if (typeof window === "undefined") return base;
@@ -75,6 +61,7 @@ function effectiveApiBase(): string {
 }
 
 let _csrfToken: string | null = null;
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 const buildUrl = (input: string): string => {
   if (input.startsWith("http")) return input;
@@ -83,7 +70,9 @@ const buildUrl = (input: string): string => {
   return `${base}/${path}`;
 };
 
-const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+function isMutatingMethod(method?: string): boolean {
+  return MUTATING_METHODS.has((method || "GET").toUpperCase());
+}
 
 function injectCsrfHeader(init: RequestInit): RequestInit {
   const method = (init.method || "GET").toUpperCase();
@@ -99,6 +88,26 @@ function injectCsrfHeader(init: RequestInit): RequestInit {
 function captureCsrfToken(res: Response): void {
   const token = res.headers.get("X-CSRF-Token");
   if (token) _csrfToken = token;
+}
+
+async function ensureCsrfToken(init?: RequestInit): Promise<void> {
+  if (_csrfToken || !isMutatingMethod(init?.method)) return;
+
+  const response = await fetch(buildUrl("/api/auth/csrf-token"), {
+    method: "GET",
+    credentials: init?.credentials ?? "include",
+  });
+  captureCsrfToken(response);
+}
+
+async function isCsrfErrorResponse(res: Response): Promise<boolean> {
+  if (res.status !== 403) return false;
+  try {
+    const data = (await res.clone().json().catch(() => ({}))) as { code?: unknown };
+    return typeof data.code === "string" && data.code.startsWith("CSRF_");
+  } catch {
+    return false;
+  }
 }
 
 function handleUnauthorized(input: string, res: Response): void {
@@ -118,37 +127,55 @@ export async function apiFetch(
     credentials: init?.credentials ?? "include",
     ...init,
   };
-  const finalInit = injectCsrfHeader(baseInit);
+
+  await ensureCsrfToken(baseInit);
+
+  const runFetch = async (requestUrl: string): Promise<Response> => {
+    const response = await fetch(requestUrl, injectCsrfHeader(baseInit));
+    captureCsrfToken(response);
+    return response;
+  };
 
   try {
-    const res = await fetch(url, finalInit);
-    captureCsrfToken(res);
+    let res = await runFetch(url);
+
+    if (isMutatingMethod(baseInit.method) && (await isCsrfErrorResponse(res))) {
+      _csrfToken = null;
+      await ensureCsrfToken(baseInit);
+      res = await runFetch(url);
+    }
+
     handleUnauthorized(input, res);
     return res;
   } catch (error) {
     const onLocalMachine =
       typeof window === "undefined" || isBrowserLocalHostname(window.location.hostname);
-    // Chỉ retry backend cục bộ khi chạy Vite dev trên máy dev — cùng origin proxy (mặc định :6000), không 3001.
+
     if (isDev && onLocalMachine && !input.startsWith("http")) {
-      const devApiOrigin = String(
-        (import.meta as any).env?.VITE_API_PROXY_TARGET || "",
-      )
+      const devApiOrigin = String((import.meta as any).env?.VITE_API_PROXY_TARGET || "")
         .trim()
         .replace(/\/+$/, "");
       const fallbackOrigin = devApiOrigin || "http://127.0.0.1:6000";
+      const fallbackUrl = `${fallbackOrigin}/${input.replace(/^\/+/, "")}`;
+
       try {
-        const res = await fetch(
-          `${fallbackOrigin}/${input.replace(/^\/+/, "")}`,
-          finalInit,
-        );
-        captureCsrfToken(res);
+        let res = await runFetch(fallbackUrl);
+        if (isMutatingMethod(baseInit.method) && (await isCsrfErrorResponse(res))) {
+          _csrfToken = null;
+          await ensureCsrfToken(baseInit);
+          res = await runFetch(fallbackUrl);
+        }
         handleUnauthorized(input, res);
         return res;
       } catch {}
 
       try {
-        const res = await fetch(input, finalInit);
-        captureCsrfToken(res);
+        let res = await runFetch(input);
+        if (isMutatingMethod(baseInit.method) && (await isCsrfErrorResponse(res))) {
+          _csrfToken = null;
+          await ensureCsrfToken(baseInit);
+          res = await runFetch(input);
+        }
         handleUnauthorized(input, res);
         return res;
       } catch {}

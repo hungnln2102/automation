@@ -9,13 +9,8 @@ const {
 const { resolveAdobeSlotsUsed } = require("./usersSnapshotUtils");
 const { deleteAdminAccountById } = require("./accountDeletion");
 const { resolveDongvanOAuthFromBody } = require("../../services/dongvan/parseDongvanLine");
-const {
-  listMailBackupMailboxes,
-  createMailBackupMailbox,
-  updateMailBackupMailbox,
-  deleteMailBackupMailbox,
-} = require("./mailBackup");
 const mailBackupService = require("../../services/mailBackupService");
+const proxyPoolService = require("../../services/proxyPoolService");
 
 const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -59,12 +54,12 @@ function resolveOtpOAuthFields(body) {
 function validateDongvanCredentials(otpSource, oauth) {
   if (otpSource !== "dongvan") return null;
   if (!oauth.refreshToken || !oauth.clientId) {
-    return "DongVan OTP cần dán dòng mail đầy đủ (email|...|token|client_id).";
+    return "DongVan OTP cáº§n dÃ¡n dÃ²ng mail Ä‘áº§y Ä‘á»§ (email|...|token|client_id).";
   }
   return null;
 }
 
-function buildNewAccountRow(email, otpSource, password, oauth = {}, mailBackupId = null) {
+function buildNewAccountRow(email, otpSource, password, oauth = {}, mailBackupId = null, proxyId = null) {
   return {
     [COLS.EMAIL]: email,
     [COLS.PASSWORD_ENC]: password,
@@ -83,8 +78,25 @@ function buildNewAccountRow(email, otpSource, password, oauth = {}, mailBackupId
     ...(COLS.MAIL_BACKUP_ID && mailBackupId
       ? { [COLS.MAIL_BACKUP_ID]: mailBackupId }
       : {}),
+    ...(COLS.PROXY_ID && proxyId ? { [COLS.PROXY_ID]: proxyId } : {}),
     ...(COLS.URL_ACCESS ? { [COLS.URL_ACCESS]: null } : {}),
   };
+}
+
+async function resolveProxyIdInput(body) {
+  if (body?.proxy_id == null || String(body.proxy_id).trim() === "") {
+    return null;
+  }
+  const id = Number(body.proxy_id);
+  if (!Number.isFinite(id) || id < 1) {
+    throw new Error("proxy_id khong hop le.");
+  }
+  const row = await proxyPoolService.getAdminProxyById(id);
+  const PX = proxyPoolService.PX_COLS;
+  if (!row || row[PX.IS_ACTIVE] === false) {
+    throw new Error("Khong tim thay proxy (proxy_id).");
+  }
+  return id;
 }
 
 async function resolveMailBackupIdInput(body) {
@@ -122,6 +134,7 @@ const listAccounts = async (_req, res) => {
         ...(COLS.OTP_CLIENT_ID ? [`${TABLE}.${COLS.OTP_CLIENT_ID}`] : []),
         ...(COLS.OTP_MAIL_EMAIL ? [`${TABLE}.${COLS.OTP_MAIL_EMAIL}`] : []),
         ...(COLS.MAIL_BACKUP_ID ? [`${TABLE}.${COLS.MAIL_BACKUP_ID}`] : []),
+        ...(COLS.PROXY_ID ? [`${TABLE}.${COLS.PROXY_ID}`] : []),
         ...(COLS.URL_ACCESS ? [`${TABLE}.${COLS.URL_ACCESS}`] : []),
         ...(COLS.ID_PRODUCT ? [`${TABLE}.${COLS.ID_PRODUCT}`] : []),
         ...(COLS.ALERT_CONFIG ? [`${TABLE}.${COLS.ALERT_CONFIG}`] : []),
@@ -191,8 +204,10 @@ const createAccount = async (req, res) => {
   }
 
   let mailBackupId = null;
+  let proxyId = null;
   try {
     mailBackupId = await resolveMailBackupIdInput(req.body);
+    proxyId = await resolveProxyIdInput(req.body);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
@@ -220,7 +235,7 @@ const createAccount = async (req, res) => {
     }
 
     const [inserted] = await db(TABLE)
-      .insert(buildNewAccountRow(email, otpSource, password, oauth, mailBackupId))
+      .insert(buildNewAccountRow(email, otpSource, password, oauth, mailBackupId, proxyId))
       .returning(COLS.ID);
 
     const id =
@@ -293,10 +308,23 @@ const createAccountsBulk = async (req, res) => {
       return res.status(400).json({ error: dongvanErr });
     }
 
+    let proxyId = null;
+    let mailBackupId = null;
+    try {
+      mailBackupId = await resolveMailBackupIdInput(req.body);
+      proxyId = await resolveProxyIdInput(req.body);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
     let inserted = [];
     if (newEmails.length > 0) {
       inserted = await db(TABLE)
-        .insert(newEmails.map((email) => buildNewAccountRow(email, otpSource, password, oauth)))
+        .insert(
+          newEmails.map((email) =>
+            buildNewAccountRow(email, otpSource, password, oauth, mailBackupId, proxyId)
+          )
+        )
         .returning([COLS.ID, COLS.EMAIL]);
     }
 
@@ -385,6 +413,7 @@ const updateAccount = async (req, res) => {
     otp_client_id: COLS.OTP_CLIENT_ID,
     otp_mail_email: COLS.OTP_MAIL_EMAIL,
     mail_backup_id: COLS.MAIL_BACKUP_ID,
+    proxy_id: COLS.PROXY_ID,
   };
 
   const updates = {};
@@ -419,6 +448,24 @@ const updateAccount = async (req, res) => {
       const MB = mailBackupService.MB_COLS;
       if (!row || row[MB.IS_ACTIVE] === false) {
         return res.status(400).json({ error: "Khong tim thay mail IMAP." });
+      }
+      updates[col] = parsedId;
+      continue;
+    }
+    if (key === "proxy_id") {
+      if (!COLS.PROXY_ID) continue;
+      if (val === "" || val == null) {
+        updates[col] = null;
+        continue;
+      }
+      const parsedId = Number(val);
+      if (!Number.isFinite(parsedId) || parsedId < 1) {
+        return res.status(400).json({ error: "proxy_id khong hop le." });
+      }
+      const row = await proxyPoolService.getAdminProxyById(parsedId);
+      const PX = proxyPoolService.PX_COLS;
+      if (!row || row[PX.IS_ACTIVE] === false) {
+        return res.status(400).json({ error: "Khong tim thay proxy." });
       }
       updates[col] = parsedId;
       continue;

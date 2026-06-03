@@ -14,6 +14,20 @@ export type MailBackupMailbox = {
   updated_at?: string | null;
 };
 
+export type AdminProxyItem = {
+  id: number;
+  label: string | null;
+  proxy_url_masked: string;
+  note: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  is_alive: boolean;
+  last_checked_at?: string | null;
+  last_error?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export type AdobeAdminAccount = {
   id: number;
   email: string;
@@ -23,6 +37,7 @@ export type AdobeAdminAccount = {
   otp_client_id?: string | null;
   otp_mail_email?: string | null;
   mail_backup_id?: number | null;
+  proxy_id?: number | null;
   /** mail_backup.alias_prefix (OTP / Gmail +alias) */
   alias?: string | null;
   org_name: string | null;

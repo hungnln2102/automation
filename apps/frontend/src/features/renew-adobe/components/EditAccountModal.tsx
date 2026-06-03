@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { AdobeAdminAccount } from "../types";
 import { updateAdobeAccount } from "../api/renewAdobeApi";
-import { WEB_OTP_SOURCE_OPTIONS, isDongvanOtpSource, type RenewOtpSource } from "../otpSource";
+import { ADMIN_OTP_SOURCE_OPTIONS, isDongvanOtpSource, type RenewOtpSource } from "../otpSource";
 import {
   DongvanOtpFields,
   validateDongvanOtpFields,
@@ -118,7 +118,7 @@ export function EditAccountModal({ account, onClose, onSaved }: EditAccountModal
               className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none"
             >
               <option value="imap">IMAP (mail_backup/alias)</option>
-              {WEB_OTP_SOURCE_OPTIONS.map((opt) => (
+              {ADMIN_OTP_SOURCE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

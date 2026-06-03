@@ -62,8 +62,22 @@ function getPlaywrightProxyOptions() {
   return opt;
 }
 
+/** Chromium args — residential HTTP proxy hay lỗi HTTP/2 với Adobe. */
+function getChromiumLaunchArgs({ useProxy = false } = {}) {
+  const args = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-quic",
+  ];
+  if (useProxy) args.push("--disable-http2");
+  return args;
+}
+
 module.exports = {
   getProxyConfig,
   getPlaywrightProxyOptions,
   parseProxyUrl,
+  getChromiumLaunchArgs,
 };

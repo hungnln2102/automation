@@ -5,7 +5,7 @@
 
 const { chromium } = require("playwright");
 const logger = require("../../../utils/logger");
-const { getPlaywrightProxyOptions } = require("./shared/proxyConfig");
+const { getPlaywrightProxyOptions, getChromiumLaunchArgs } = require("./shared/proxyConfig");
 const { runCheckFlow } = require("./runCheckFlow");
 const {
   launchSessionFromProfile,
@@ -106,11 +106,20 @@ async function checkAccount(email, password, options = {}) {
   const pinnedFromDb = parseCcpProductIdsFromAlertConfig(options.savedCookiesFromDb);
 
   const headless = process.env.PLAYWRIGHT_HEADLESS !== "false";
-  const proxyOptions = getPlaywrightProxyOptions();
+  const proxyOptions = options.proxyOptions ?? getPlaywrightProxyOptions();
+  const proxyId = options.proxyId ?? null;
+  if (proxyOptions) {
+    logger.info(
+      "[adobe-v2] facade.checkAccount: proxy=%s source=%s id=%s",
+      proxyOptions.server,
+      options.proxySource || (options.proxyOptions ? "options" : "env"),
+      proxyId ?? "—"
+    );
+  }
   const launchOptions = {
     headless,
     slowMo: headless ? 0 : 80,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+    args: getChromiumLaunchArgs({ useProxy: Boolean(proxyOptions) }),
   };
   if (proxyOptions) launchOptions.proxy = proxyOptions;
 
@@ -181,9 +190,15 @@ async function checkAccount(email, password, options = {}) {
       forceProductCheck,
       stopAfterProductsWhenNoCcp,
       pinnedCcpProductIds: pinnedFromDb,
+      proxyOptions,
+      proxyId,
     });
 
     if (!result.success) {
+      if (proxyId) {
+        const { markProxyDeadIfNetworkError } = require("../adminProxyOptions");
+        await markProxyDeadIfNetworkError(proxyId, result.error).catch(() => {});
+      }
       return { success: false, scrapedData: null, savedCookies: null, error: result.error };
     }
 

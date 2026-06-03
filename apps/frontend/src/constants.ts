@@ -19,4 +19,7 @@ export const API_ENDPOINTS = {
   RENEW_ADOBE_MAIL_BACKUP: "/api/renew-adobe/mail-backup",
   RENEW_ADOBE_MAIL_BACKUP_ITEM: (id: number) => `/api/renew-adobe/mail-backup/${id}`,
   RENEW_ADOBE_MAIL_BACKUP_TEST: (id: number) => `/api/renew-adobe/mail-backup/${id}/test`,
+  RENEW_ADOBE_PROXY_POOL: "/api/renew-adobe/proxy-pool",
+  RENEW_ADOBE_PROXY_POOL_ITEM: (id: number) => `/api/renew-adobe/proxy-pool/${id}`,
+  RENEW_ADOBE_PROXY_POOL_TEST: (id: number) => `/api/renew-adobe/proxy-pool/${id}/test`,
 } as const;

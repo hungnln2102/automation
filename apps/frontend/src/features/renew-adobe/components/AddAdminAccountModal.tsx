@@ -5,7 +5,7 @@ import {
   createAdobeAdminAccount,
   createAdobeAdminAccountsBulk,
 } from "../api/renewAdobeApi";
-import { WEB_OTP_SOURCE_OPTIONS, isDongvanOtpSource, type RenewOtpSource } from "../otpSource";
+import { ADMIN_OTP_SOURCE_OPTIONS, isDongvanOtpSource, type RenewOtpSource } from "../otpSource";
 import {
   buildDongvanOtpPayload,
   DongvanOtpFields,
@@ -42,7 +42,7 @@ export function AddAdminAccountModal({
   const [email, setEmail] = useState("");
   const [bulkEmails, setBulkEmails] = useState("");
   const [password, setPassword] = useState("");
-  const [otpSource, setOtpSource] = useState<RenewOtpSource>("hdsd");
+  const [otpSource, setOtpSource] = useState<RenewOtpSource>("imap");
   const [otpRefreshToken, setOtpRefreshToken] = useState("");
   const [otpClientId, setOtpClientId] = useState("");
   const [otpMailEmail, setOtpMailEmail] = useState("");
@@ -60,7 +60,7 @@ export function AddAdminAccountModal({
     setEmail("");
     setBulkEmails("");
     setPassword("");
-    setOtpSource("hdsd");
+    setOtpSource("imap");
     setOtpRefreshToken("");
     setOtpClientId("");
     setOtpMailEmail("");
@@ -305,7 +305,7 @@ export function AddAdminAccountModal({
                 onChange={(ev) => setOtpSource(ev.target.value as RenewOtpSource)}
                 disabled={loading}
               >
-                {WEB_OTP_SOURCE_OPTIONS.map((opt) => (
+                {ADMIN_OTP_SOURCE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
